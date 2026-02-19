@@ -1,0 +1,440 @@
+* {
+    font-family: 'Inter', sans-serif;
+}
+
+iframe {
+    border: none;
+    outline: none;
+}
+
+/* Glass effect */
+.glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Price animation */
+.price-update {
+    animation: price-pulse 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes price-pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Status indicators */
+.status-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
+}
+
+.status-live {
+    background-color: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+.dark .status-live {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.5);
+}
+
+/* Progress bar */
+.progress-bar {
+    transition: width 1s linear;
+}
+
+/* Buttons */
+.compact-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+}
+
+.compact-btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Card hover effects */
+.card-hover {
+    transition: all 0.2s;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.dark .card-hover:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Simulation active state */
+.simulation-active {
+    position: relative;
+    overflow: hidden;
+}
+
+.simulation-active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    animation: shimmer 2s infinite;
+}
+
+/* Chart touch visual state */
+.chart-touch-active {
+    border: 2px solid rgba(59, 130, 246, 0.3);
+}
+
+.chart-touch-drag {
+    border: 2px solid rgba(34, 197, 94, 0.5);
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Content fitting */
+.content-fit {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.text-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Price container */
+.price-container {
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.price-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+}
+
+@media (min-width: 1280px) {
+    .price-text {
+        font-size: 1.75rem;
+    }
+}
+
+/* Row divider */
+.row-divider {
+    border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+.dark .row-divider {
+    border-bottom: 1px solid rgba(55, 65, 81, 0.8);
+}
+
+/* Enhanced typography */
+.font-numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+/* Enhanced card */
+.card-elevated {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.dark .card-elevated {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Subtle borders */
+.border-subtle {
+    border-color: rgba(229, 231, 235, 0.5);
+}
+
+.dark .border-subtle {
+    border-color: rgba(55, 65, 81, 0.5);
+}
+
+/* Smooth transitions */
+.transition-smooth {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+}
+
+/* Compact grid */
+.grid-tight {
+    grid-column-gap: 0.5rem;
+    grid-row-gap: 0.5rem;
+}
+
+/* Better visibility for numbers */
+.number-highlight {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.dark .number-highlight {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading animation */
+.loading-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ===== SOLUSI KHUSUS TRADING VIEW DI MOBILE ===== */
+@media (max-width: 768px) {
+
+    /* Container chart dengan isolasi touch */
+    .chart-container {
+        position: relative;
+        width: 100%;
+        height: 450px !important;
+        overflow: hidden !important;
+        -webkit-overflow-scrolling: auto !important;
+        touch-action: none !important;
+        /* Nonaktifkan scroll browser */
+        overscroll-behavior: contain !important;
+        /* Cegah pull-to-refresh */
+    }
+
+    /* Iframe Trading View */
+    #tvIframe {
+        width: 100% !important;
+        height: 450px !important;
+        border: none;
+        pointer-events: auto !important;
+        touch-action: pan-y pinch-zoom !important;
+        /* Izinkan geser horizontal dan zoom */
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    /* Pastikan right panel punya tinggi yang cukup */
+    #rightPanel {
+        min-height: 450px;
+        height: auto;
+        position: relative;
+        z-index: 10;
+    }
+
+    /* Saat sedang touch chart, lock scroll halaman */
+    body.chart-touching {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+    }
+}
+
+/* Untuk layar sangat kecil */
+@media (max-width: 480px) {
+
+    .chart-container,
+    #tvIframe {
+        height: 400px !important;
+    }
+
+    #rightPanel {
+        min-height: 400px;
+    }
+}
+
+/* ===== RESPONSIVE STYLES UNTUK MOBILE ===== */
+@media (max-width: 768px) {
+
+    /* Ubah grid utama menjadi 1 kolom */
+    #dashboardGrid {
+        grid-template-columns: 1fr !important;
+    }
+
+    #leftPanel,
+    #rightPanel {
+        grid-column: span 1 !important;
+    }
+
+    /* Atur ulang tampilan header */
+    #dashboardGrid>div:first-child>div:first-child {
+        grid-template-columns: 1fr !important;
+        height: auto !important;
+    }
+
+    /* TIME.IS iframe jadi full width */
+    #dashboardGrid>div:first-child>div:first-child>div:first-child {
+        grid-column: span 1 !important;
+        height: 100px !important;
+    }
+
+    /* Controls jadi full width */
+    #dashboardGrid>div:first-child>div:first-child>div:last-child {
+        grid-column: span 1 !important;
+    }
+
+    /* Atur ulang control panel */
+    #dashboardGrid>div:first-child>div:first-child>div:last-child>div>div {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Harga beli/jual grid */
+    #dashboardGrid>div:first-child>div:nth-child(2) {
+        grid-template-columns: 1fr !important;
+        height: auto !important;
+    }
+
+    /* Spread dan gram grid */
+    #dashboardGrid>div:first-child>div:nth-child(3)>div {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Spread card */
+    #dashboardGrid>div:first-child>div:nth-child(3)>div>div:first-child {
+        grid-column: span 2 !important;
+    }
+
+    /* Simulation area grid */
+    #dashboardGrid>div:first-child>div:last-child>div>div {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Tombol kontrol jadi lebih besar untuk mobile */
+    .compact-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    /* Harga teks lebih kecil di mobile */
+    .price-text {
+        font-size: 1.25rem;
+    }
+
+    /* Status bar footer jadi column */
+    .mt-1\.5.flex {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+
+    /* Chart width menu position */
+    #chartWidthMenu {
+        right: 2.5rem !important;
+        top: 2.5rem !important;
+    }
+
+    /* HAPUS atau KOMENTAR baris ini karena sudah diganti */
+    /* #tvIframe {
+                height: 400px;
+            } */
+
+    /* TIME.IS iframe adjustment */
+    #timeIframe {
+        top: -150% !important;
+        height: 250% !important;
+    }
+
+    /* Simulation buttons */
+    #markBuyBtn,
+    #markSellBtn {
+        padding: 0.75rem !important;
+    }
+
+    #markBuyBtn div,
+    #markSellBtn div {
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+    }
+
+    #markBuyBtn svg,
+    #markSellBtn svg {
+        width: 1.25rem !important;
+        height: 1.25rem !important;
+    }
+}
+
+/* Untuk layar sangat kecil */
+@media (max-width: 480px) {
+
+    /* Spread dan gram grid jadi 1 kolom */
+    #dashboardGrid>div:first-child>div:nth-child(3)>div {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Spread card */
+    #dashboardGrid>div:first-child>div:nth-child(3)>div>div:first-child {
+        grid-column: span 1 !important;
+    }
+
+    /* Timer display lebih kecil */
+    #lastUpdate {
+        font-size: 1.25rem !important;
+    }
+
+    #countdown {
+        font-size: 1rem !important;
+    }
+
+    /* Simulation results grid */
+    #buySimulation .grid,
+    #sellSimulation .grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Status bar text */
+    .text-xxs {
+        font-size: 0.5rem;
+    }
+
+    /* Padding lebih kecil */
+    .p-2 {
+        padding: 0.5rem;
+    }
+
+    /* TIME.IS iframe */
+    #timeIframe {
+        top: -120% !important;
+    }
+}
