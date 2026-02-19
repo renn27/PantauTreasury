@@ -359,6 +359,61 @@ iframe {
     }
 }
 
+/* ===== ACCORDION STYLES ===== */
+.accordion-enter {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+}
+
+.accordion-enter-active {
+    max-height: 300px;
+    opacity: 1;
+}
+
+.accordion-exit {
+    max-height: 300px;
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in, opacity 0.2s ease-in;
+}
+
+.accordion-exit-active {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* Perbaikan untuk input manual */
+#manualGramInput {
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#manualGramInput:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dark #manualGramInput:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Animasi chevron */
+#accordionChevron.rotated {
+    transform: rotate(180deg);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    #manualGramAccordion .grid-cols-2 {
+        gap: 0.5rem;
+    }
+    
+    #manualGramAccordion .p-4 {
+        padding: 0.75rem;
+    }
+}
+
 /* ===== RESPONSIVE STYLES UNTUK MOBILE ===== */
 @media (max-width: 768px) {
 

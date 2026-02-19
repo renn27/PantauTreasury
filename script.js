@@ -1,4 +1,3 @@
-
 /* ================= REQUEST HEADERS (AMAN UNTUK BROWSER) ================= */
 const REQUEST_HEADERS = {
     'Accept': 'application/json, text/plain, */*',
@@ -104,6 +103,8 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
     hour12: false
 }).format;
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
+const SIMULATION_BUY_BASE = 50000000;
+const SIMULATION_SELL_BASE = 48325000;
 const DEBUG = false;
 
 function debugLog(...args) {
@@ -118,6 +119,15 @@ function fastParse(str) {
         if (code > 47 && code < 58) n = n * 10 + (code - 48);
     }
     return n;
+}
+
+function parsePositiveFloat(rawValue) {
+    if (rawValue === null || rawValue === undefined) return null;
+    const normalized = String(rawValue).trim().replace(/,/g, '.');
+    if (!normalized) return null;
+    const value = Number(normalized);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return value;
 }
 
 function isSameMinuteBucket(a, b) {
@@ -214,10 +224,10 @@ function renderCachedData() {
     if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
 
     // Hitung gram
-    const gramBeli = (50000000 / cached.buy).toFixed(4);
-    const gramJual = (48325000 / cached.sell).toFixed(4);
-    const nilaiJual = (50000000 / cached.buy * cached.sell);
-    const cuan = nilaiJual - 48325000;
+    const gramBeli = (SIMULATION_BUY_BASE / cached.buy).toFixed(4);
+    const gramJual = (SIMULATION_SELL_BASE / cached.sell).toFixed(4);
+    const nilaiJual = (SIMULATION_BUY_BASE / cached.buy * cached.sell);
+    const cuan = nilaiJual - SIMULATION_SELL_BASE;
 
     if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli} g`;
     if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
@@ -232,7 +242,7 @@ function renderCachedData() {
     return true;
 }
 
-/* ================= FUNGSI BARU: HANDLE TOCH UNTUK TRADING VIEW ================= */
+/* ================= FUNGSI BARU: HANDLE TOUCH UNTUK TRADING VIEW ================= */
 function fixTradingViewTouch() {
     const tvIframe = document.getElementById('tvIframe');
     const chartContainer = document.querySelector('.chart-container');
@@ -348,7 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
         'refreshApiBtn', 'themeText', 'bigRefreshBtn',
         'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
         'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
-        'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe'
+        'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
+        'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
+        'manualBuyPricePreview', 'manualSellPricePreview',
+        'manualGramAccordion', 'accordionToggleBtn', 'accordionContent', 'accordionChevron'
     ];
 
     ids.forEach(id => {
@@ -373,6 +386,30 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.clearSimulationBtn.addEventListener('click', clearSimulation);
     }
 
+    // Setup accordion toggle
+    if (dom.accordionToggleBtn && dom.accordionContent && dom.accordionChevron) {
+        dom.accordionToggleBtn.addEventListener('click', () => {
+            const isHidden = dom.accordionContent.classList.contains('hidden');
+            
+            if (isHidden) {
+                // Open accordion
+                dom.accordionContent.classList.remove('hidden');
+                dom.accordionChevron.classList.add('rotated');
+                
+                // Animasi smooth via class (opsional, bisa pakai CSS transition)
+                dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
+            } else {
+                // Close accordion
+                dom.accordionContent.style.maxHeight = '0px';
+                setTimeout(() => {
+                    dom.accordionContent.classList.add('hidden');
+                    dom.accordionChevron.classList.remove('rotated');
+                    dom.accordionContent.style.maxHeight = '';
+                }, 300); // Sama dengan durasi CSS transition
+            }
+        });
+    }
+
     if (dom.markBuyBtn) {
         dom.markBuyBtn.addEventListener('click', () => {
             const price = Number.isFinite(state.currentBuy) && state.currentBuy > 0
@@ -382,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.buyPrice = price;
                 state.simulation.sellPrice = null;
                 state.simulation.mode = 'buy';
-                state.simulation.gram = 50000000 / price;
+                state.simulation.gram = SIMULATION_BUY_BASE / price;
 
                 dom.markBuyBtn.classList.add('simulation-active');
                 if (dom.markSellBtn) dom.markSellBtn.classList.remove('simulation-active');
@@ -401,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.sellPrice = price;
                 state.simulation.buyPrice = null;
                 state.simulation.mode = 'sell';
-                state.simulation.gram = 48325000 / price;
+                state.simulation.gram = SIMULATION_SELL_BASE / price;
 
                 dom.markSellBtn.classList.add('simulation-active');
                 if (dom.markBuyBtn) dom.markBuyBtn.classList.remove('simulation-active');
@@ -410,6 +447,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    if (dom.manualGramInput) {
+        dom.manualGramInput.addEventListener('input', updateManualPricePreview);
+        dom.manualGramInput.addEventListener('blur', updateManualPricePreview);
+    }
+
+    dom.applyManualBuyBtn?.addEventListener('click', () => {
+        applyManualGramSimulation('buy');
+    });
+
+    dom.applyManualSellBtn?.addEventListener('click', () => {
+        applyManualGramSimulation('sell');
+    });
+
+    updateManualPricePreview();
 
     if (dom.refreshApiBtn) {
         dom.refreshApiBtn.addEventListener('click', () => {
@@ -807,10 +859,10 @@ function updateUI(data) {
         if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
 
         // Gram calculations
-        const gramBeli = (50000000 / buy).toFixed(4);
-        const gramJual = (48325000 / sell).toFixed(4);
-        const nilaiJual = (50000000 / buy * sell);
-        const cuan = nilaiJual - 48325000;
+        const gramBeli = (SIMULATION_BUY_BASE / buy).toFixed(4);
+        const gramJual = (SIMULATION_SELL_BASE / sell).toFixed(4);
+        const nilaiJual = (SIMULATION_BUY_BASE / buy * sell);
+        const cuan = nilaiJual - SIMULATION_SELL_BASE;
 
         if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli} g`;
         if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
@@ -951,6 +1003,68 @@ function updateSimulationCardValues(mode, node, markedGram, currentGram, gramDif
     setProfitColorClass(profitLossEl, isPositive);
 }
 
+function setManualGramError(message = '') {
+    if (!dom.manualGramError) return;
+    if (message) {
+        dom.manualGramError.textContent = message;
+        dom.manualGramError.classList.remove('hidden');
+        return;
+    }
+    dom.manualGramError.classList.add('hidden');
+}
+
+let previewTimeout;
+function updateManualPricePreview() {
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => {
+        if (!dom.manualBuyPricePreview || !dom.manualSellPricePreview) return;
+        
+        const gram = parsePositiveFloat(dom.manualGramInput?.value || '');
+        if (!gram) {
+            dom.manualBuyPricePreview.textContent = '-';
+            dom.manualSellPricePreview.textContent = '-';
+            return;
+        }
+
+        const buyPrice = SIMULATION_BUY_BASE / gram;
+        const sellPrice = SIMULATION_SELL_BASE / gram;
+        dom.manualBuyPricePreview.textContent = formatRupiah(buyPrice);
+        dom.manualSellPricePreview.textContent = formatRupiah(sellPrice);
+        setManualGramError('');
+    }, 300); // Debounce 300ms
+}
+
+function applyManualGramSimulation(mode) {
+    if (mode !== 'buy' && mode !== 'sell') return;
+
+    const gram = parsePositiveFloat(dom.manualGramInput?.value || '');
+    if (!gram) {
+        setManualGramError('Masukkan gram valid lebih dari 0');
+        return;
+    }
+
+    setManualGramError('');
+    updateManualPricePreview();
+
+    if (mode === 'buy') {
+        state.simulation.buyPrice = SIMULATION_BUY_BASE / gram;
+        state.simulation.sellPrice = null;
+        state.simulation.mode = 'buy';
+        dom.markBuyBtn?.classList.add('simulation-active');
+        dom.markSellBtn?.classList.remove('simulation-active');
+    } else {
+        state.simulation.sellPrice = SIMULATION_SELL_BASE / gram;
+        state.simulation.buyPrice = null;
+        state.simulation.mode = 'sell';
+        dom.markSellBtn?.classList.add('simulation-active');
+        dom.markBuyBtn?.classList.remove('simulation-active');
+    }
+
+    state.simulation.gram = gram;
+    saveSimulationToStorage();
+    updateSimulation();
+}
+
 function updateSimulation() {
     if (!dom.simulationResults) return;
 
@@ -965,6 +1079,11 @@ function updateSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.remove('hidden');
 
+    // Tampilkan accordion manual gram jika ada simulasi aktif
+    if (dom.manualGramAccordion) {
+        dom.manualGramAccordion.classList.remove('hidden');
+    }
+
     const inactiveMode = mode === 'buy' ? 'sell' : 'buy';
     const inactiveNode = state.simulationNodes[inactiveMode] ||
         document.getElementById(inactiveMode === 'buy' ? 'buySimulation' : 'sellSimulation');
@@ -973,11 +1092,11 @@ function updateSimulation() {
     state.simulationSlots[inactiveMode] = null;
 
     if (mode === 'buy' && state.simulation.buyPrice) {
-        const markedGram = 50000000 / state.simulation.buyPrice;
+        const markedGram = SIMULATION_BUY_BASE / state.simulation.buyPrice;
         state.simulation.gram = markedGram;
-        const currentGram = 48325000 / sell;
+        const currentGram = SIMULATION_SELL_BASE / sell;
         const gramDiff = markedGram - currentGram;
-        const profitLoss = (markedGram * sell) - 48325000;
+        const profitLoss = (markedGram * sell) - SIMULATION_SELL_BASE;
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('buy');
@@ -988,11 +1107,11 @@ function updateSimulation() {
         }
 
     } else if (mode === 'sell' && state.simulation.sellPrice) {
-        const markedGram = 48325000 / state.simulation.sellPrice;
+        const markedGram = SIMULATION_SELL_BASE / state.simulation.sellPrice;
         state.simulation.gram = markedGram;
-        const currentGram = 50000000 / buy;
+        const currentGram = SIMULATION_BUY_BASE / buy;
         const gramDiff = currentGram - markedGram;
-        const profitLoss = 50000000 - (markedGram * buy);
+        const profitLoss = SIMULATION_BUY_BASE - (markedGram * buy);
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('sell');
@@ -1093,6 +1212,15 @@ function clearSimulation() {
     if (dom.noSimulation) dom.noSimulation.style.display = 'block';
     if (dom.markBuyBtn) dom.markBuyBtn.classList.remove('simulation-active');
     if (dom.markSellBtn) dom.markSellBtn.classList.remove('simulation-active');
+
+    // Sembunyikan accordion
+    if (dom.manualGramAccordion) {
+        dom.manualGramAccordion.classList.add('hidden');
+        if (dom.accordionContent) {
+            dom.accordionContent.classList.add('hidden');
+            dom.accordionChevron?.classList.remove('rotated');
+        }
+    }
 
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.add('hidden');
@@ -1211,4 +1339,3 @@ if (localStorage.getItem('darkMode') === 'true') {
     window.matchMedia('(prefers-color-scheme: dark)').matches) {
     document.documentElement.classList.add('dark');
 }
-
