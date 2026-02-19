@@ -1,0 +1,28 @@
+{
+  "name": "pantautreasury",
+  "version": "1.0.0",
+  "description": "",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:css": "tailwindcss -c tailwind.config.js -i ./tailwind.input.css -o ./tailwind.css --minify",
+    "watch:css": "tailwindcss -c tailwind.config.js -i ./tailwind.input.css -o ./tailwind.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/renn27/PantauTreasury.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/renn27/PantauTreasury/issues"
+  },
+  "homepage": "https://github.com/renn27/PantauTreasury#readme",
+  "devDependencies": {
+    "autoprefixer": "^10.4.24",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17"
+  }
+}
