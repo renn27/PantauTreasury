@@ -51,7 +51,8 @@ try {
 /* ================= GLOBAL STATE ================= */
 let state = {
     countdown: 60,
-    countdownTimer: null,
+    countdownExpiredTriggered: false,
+    timerTicker: null,
     fetchController: null,
     isAutoFetching: false,
     isManualRefresh: false,
@@ -64,8 +65,6 @@ let state = {
         gram: null
     },
     chartWidth: '1/4',
-    autoFetchInterval: null,
-    secondChecker: null,
     targetMinute: null,
     isRetrying: false,
     lastFetchTime: null,
@@ -81,7 +80,13 @@ let state = {
     simulationNodes: {
         buy: null,
         sell: null
-    }
+    },
+    simulationSlots: {
+        buy: null,
+        sell: null
+    },
+    priceAnimationTimeoutId: null,
+    priceAnimationFrameId: null
 };
 
 /* ================= DOM CACHE ================= */
@@ -140,12 +145,53 @@ function getSimulationStorageKey() {
     ].join('|');
 }
 
+function updateCountdownDisplay() {
+    if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
+    if (dom.countdownBar) {
+        const width = Math.max(0, Math.min(100, (state.countdown / 60) * 100));
+        dom.countdownBar.style.width = `${width}%`;
+    }
+}
+
+function setCuanColorClass(isPositive) {
+    if (!dom.cuan) return;
+    dom.cuan.classList.toggle('text-green-600', isPositive);
+    dom.cuan.classList.toggle('dark:text-green-400', isPositive);
+    dom.cuan.classList.toggle('text-red-600', !isPositive);
+    dom.cuan.classList.toggle('dark:text-red-400', !isPositive);
+}
+
+function triggerPriceChangeAnimation() {
+    if (!dom.hargaBeli || !dom.hargaJual) return;
+
+    dom.hargaBeli.classList.remove('price-update');
+    dom.hargaJual.classList.remove('price-update');
+
+    if (state.priceAnimationFrameId) {
+        cancelAnimationFrame(state.priceAnimationFrameId);
+    }
+    if (state.priceAnimationTimeoutId) {
+        clearTimeout(state.priceAnimationTimeoutId);
+    }
+
+    state.priceAnimationFrameId = requestAnimationFrame(() => {
+        dom.hargaBeli.classList.add('price-update');
+        dom.hargaJual.classList.add('price-update');
+
+        state.priceAnimationTimeoutId = setTimeout(() => {
+            dom.hargaBeli.classList.remove('price-update');
+            dom.hargaJual.classList.remove('price-update');
+            state.priceAnimationTimeoutId = null;
+        }, 300);
+    });
+}
+
 /* ================= RENDER CACHED DATA INSTANTLY ================= */
 function renderCachedData() {
     const cached = priceCache.get();
     if (!cached || !dom.hargaBeli) return false;
 
-    debugLog('⚡ Rendering cached data');
+    debugLog('Rendering cached data');
 
     // Update harga
     dom.hargaBeli.textContent = formatRupiah(cached.buy);
@@ -180,9 +226,7 @@ function renderCachedData() {
     // Cuan
     if (dom.cuan) {
         dom.cuan.textContent = formatRupiah(cuan);
-        dom.cuan.className = cuan >= 0
-            ? 'text-sm font-bold text-green-600 dark:text-green-400 font-numeric'
-            : 'text-sm font-bold text-red-600 dark:text-red-400 font-numeric';
+        setCuanColorClass(cuan >= 0);
     }
 
     return true;
@@ -201,7 +245,7 @@ function fixTradingViewTouch() {
 
     if (!isTouchDevice) return;
 
-    debugLog('📱 Mode sentuh aktif - optimasi Trading View');
+    debugLog('Mode sentuh aktif - optimasi Trading View');
 
     let isTouching = false;
     let startX, startY;
@@ -293,7 +337,7 @@ function fixTradingViewTouch() {
 
 /* ================= INIT DOM ================= */
 document.addEventListener('DOMContentLoaded', () => {
-    debugLog('🚀 DOM Ready');
+    debugLog('DOM Ready');
 
     // Cache DOM elements
     const ids = [
@@ -303,7 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'simulationStatus', 'markBuyBtn', 'markSellBtn',
         'refreshApiBtn', 'themeText', 'bigRefreshBtn',
         'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
-        'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp'
+        'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
+        'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe'
     ];
 
     ids.forEach(id => {
@@ -382,6 +427,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Big refresh button
     if (dom.bigRefreshBtn) {
+        dom.bigRefreshIcon = dom.bigRefreshBtn.querySelector('svg');
+        if (dom.bigRefreshIcon) {
+            dom.bigRefreshIcon.classList.add('refresh-icon');
+            dom.bigRefreshIcon.addEventListener('animationend', () => {
+                dom.bigRefreshIcon.classList.remove('refresh-spin-once');
+            });
+        }
+
         dom.bigRefreshBtn.addEventListener('click', () => {
             state.isManualRefresh = true;
             state.isAutoFetching = false;
@@ -392,21 +445,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (state.fetchController) state.fetchController.abort();
 
-            // Animation
-            const icon = dom.bigRefreshBtn.querySelector('svg');
-            icon.style.transition = 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
-            icon.style.transform = 'rotate(180deg)';
+            if (dom.bigRefreshIcon) {
+                dom.bigRefreshIcon.classList.remove('refresh-spin-once');
+                void dom.bigRefreshIcon.offsetWidth;
+                dom.bigRefreshIcon.classList.add('refresh-spin-once');
+            }
 
             fetchHarga();
-
-            setTimeout(() => {
-                icon.style.transform = 'rotate(0deg)';
-            }, 500);
-        });
-
-        dom.bigRefreshBtn.addEventListener('mouseenter', () => {
-            const icon = dom.bigRefreshBtn.querySelector('svg');
-            icon.style.transition = 'transform 0.3s ease';
         });
     }
 
@@ -442,14 +487,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Dark mode button
-    const darkBtn = document.getElementById('darkModeBtn');
+    const darkBtn = dom.darkModeBtn;
     if (darkBtn) {
         darkBtn.addEventListener('click', () => {
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', isDark);
 
             // Update TradingView
-            const tvIframe = document.getElementById('tvIframe');
+            const tvIframe = dom.tvIframe;
             if (tvIframe) {
                 tvIframe.src = tvIframe.src.replace(/theme=\w+/, `theme=${isDark ? 'dark' : 'light'}`);
             }
@@ -462,14 +507,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Other buttons
-    document.getElementById('refreshIframeBtn')?.addEventListener('click', () => {
-        const timeIframe = document.getElementById('timeIframe');
-        const tvIframe = document.getElementById('tvIframe');
+    dom.refreshIframeBtn?.addEventListener('click', () => {
+        const timeIframe = dom.timeIframe;
+        const tvIframe = dom.tvIframe;
         if (timeIframe) timeIframe.src = timeIframe.src;
         if (tvIframe) tvIframe.src = tvIframe.src;
     });
 
-    document.getElementById('fullscreenBtn')?.addEventListener('click', () => {
+    dom.fullscreenBtn?.addEventListener('click', () => {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
         } else {
@@ -503,7 +548,7 @@ function applyChartWidth(width) {
     // Remove all width classes
     dom.dashboardGrid.classList.remove('grid-cols-4', 'grid-cols-3', 'grid-cols-2');
     dom.leftPanel.classList.remove('col-span-3', 'col-span-2', 'col-span-1');
-    dom.rightPanel.classList.remove('col-span-1', 'col-span-1', 'col-span-1');
+    dom.rightPanel.classList.remove('col-span-1');
 
     switch (width) {
         case '1/4':
@@ -526,7 +571,7 @@ function applyChartWidth(width) {
 
 /* ================= HYPER-FAST FETCH ================= */
 async function fetchHarga() {
-    debugLog('🔄 Fetching data...');
+    debugLog('Fetching data...');
 
     const fetchSeq = ++state.fetchSeq;
     state.isFetching = true;
@@ -588,7 +633,7 @@ async function fetchHarga() {
         }
 
         const fetchTime = Date.now() - start;
-        debugLog(`✅ Fetch: ${fetchTime}ms`);
+        debugLog(`Fetch: ${fetchTime}ms`);
 
         // Process data
         const result = {
@@ -602,14 +647,14 @@ async function fetchHarga() {
         const now = new Date();
         const isCurrentMinute = isSameMinuteBucket(updated, now);
 
-        debugLog(`📊 Data updated at: ${formatTimeId(updated)}`);
-        debugLog(`⏰ Current time: ${formatTimeId(now)}`);
-        debugLog(`✅ Is current minute: ${isCurrentMinute}`);
+        debugLog(`Data updated at: ${formatTimeId(updated)}`);
+        debugLog(`Current time: ${formatTimeId(now)}`);
+        debugLog(`Is current minute: ${isCurrentMinute}`);
 
         // Jika ini adalah fetch pertama di detik 1
         if (state.isAutoFetching && !state.targetMinute) {
             state.targetMinute = now.getMinutes();
-            debugLog(`🎯 Setting target minute: ${state.targetMinute}`);
+            debugLog(`Setting target minute: ${state.targetMinute}`);
         }
 
         // Update UI dan cache
@@ -621,7 +666,7 @@ async function fetchHarga() {
 
         // Jika data sudah sesuai dengan menit saat ini, berhenti retry
         if (state.isRetrying && isCurrentMinute) {
-            debugLog('🎉 Data sudah sesuai dengan menit saat ini, berhenti retry');
+            debugLog('Data sudah sesuai dengan menit saat ini, berhenti retry');
             state.isRetrying = false;
             state.retryCount = 0;
             state.targetMinute = null;
@@ -644,7 +689,7 @@ async function fetchHarga() {
             if (dom.lastUpdate) {
                 dom.lastUpdate.textContent = 'Timeout (3s)';
             }
-            debugLog('⏱️ Fetch timeout');
+            debugLog('Fetch timeout');
 
             if (!state.isManualRefresh) {
                 handleFetchError('timeout');
@@ -689,7 +734,7 @@ function handleRetryLogic(now) {
     }
 
     if (state.retryCount >= state.MAX_RETRY) {
-        debugLog('⏹️ Max retry reached, stopping');
+        debugLog('Max retry reached, stopping');
         state.isRetrying = false;
         state.retryCount = 0;
         state.targetMinute = null;
@@ -699,7 +744,7 @@ function handleRetryLogic(now) {
 
     state.retryCount++;
     const delay = Math.min(2000, 500 + (state.retryCount * 300));
-    debugLog(`🔄 Retry ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
+    debugLog(`Retry ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
 
     clearRetryTimeout();
     state.retryTimeoutId = setTimeout(() => {
@@ -723,7 +768,7 @@ function handleFetchError(errorType) {
 
         state.retryCount++;
         const delay = Math.min(2000, 500 + (state.retryCount * 300));
-        debugLog(`🔄 Retry after ${errorType} ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
+        debugLog(`Retry after ${errorType} ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
 
         clearRetryTimeout();
         state.retryTimeoutId = setTimeout(() => {
@@ -753,14 +798,7 @@ function updateUI(data) {
         dom.hargaJual.textContent = formatRupiah(sell);
 
         // Animation
-        setTimeout(() => {
-            dom.hargaBeli.classList.add('price-update');
-            dom.hargaJual.classList.add('price-update');
-            setTimeout(() => {
-                dom.hargaBeli.classList.remove('price-update');
-                dom.hargaJual.classList.remove('price-update');
-            }, 300);
-        }, 0);
+        triggerPriceChangeAnimation();
 
         // Spread
         const spread = buy - sell;
@@ -781,9 +819,7 @@ function updateUI(data) {
         // Cuan
         if (dom.cuan) {
             dom.cuan.textContent = formatRupiah(cuan);
-            dom.cuan.className = cuan >= 0
-                ? 'text-sm font-bold text-green-600 dark:text-green-400 font-numeric'
-                : 'text-sm font-bold text-red-600 dark:text-red-400 font-numeric';
+            setCuanColorClass(cuan >= 0);
         }
 
         state.lastRenderedBuy = buy;
@@ -879,13 +915,31 @@ function ensureSimulationNode(mode) {
     return node;
 }
 
-function updateSimulationCardValues(node, markedGram, currentGram, gramDiff, profitLoss) {
+function getSimulationSlotRefs(mode, node) {
+    const cached = state.simulationSlots[mode];
+    if (cached && cached.root === node && cached.root.isConnected) {
+        return cached;
+    }
+
+    const slots = {
+        root: node,
+        markedGramEl: node.querySelector('[data-slot="markedGram"]'),
+        currentGramEl: node.querySelector('[data-slot="currentGram"]'),
+        gramDiffEl: node.querySelector('[data-slot="gramDiff"]'),
+        profitLossEl: node.querySelector('[data-slot="profitLoss"]')
+    };
+    state.simulationSlots[mode] = slots;
+    return slots;
+}
+
+function updateSimulationCardValues(mode, node, markedGram, currentGram, gramDiff, profitLoss) {
     if (!node) return;
 
-    const markedGramEl = node.querySelector('[data-slot="markedGram"]');
-    const currentGramEl = node.querySelector('[data-slot="currentGram"]');
-    const gramDiffEl = node.querySelector('[data-slot="gramDiff"]');
-    const profitLossEl = node.querySelector('[data-slot="profitLoss"]');
+    const slots = getSimulationSlotRefs(mode, node);
+    const markedGramEl = slots.markedGramEl;
+    const currentGramEl = slots.currentGramEl;
+    const gramDiffEl = slots.gramDiffEl;
+    const profitLossEl = slots.profitLossEl;
 
     if (markedGramEl) markedGramEl.textContent = `${markedGram.toFixed(4)} g`;
     if (currentGramEl) currentGramEl.textContent = `${currentGram.toFixed(4)} g`;
@@ -916,6 +970,7 @@ function updateSimulation() {
         document.getElementById(inactiveMode === 'buy' ? 'buySimulation' : 'sellSimulation');
     if (inactiveNode) inactiveNode.remove();
     state.simulationNodes[inactiveMode] = null;
+    state.simulationSlots[inactiveMode] = null;
 
     if (mode === 'buy' && state.simulation.buyPrice) {
         const markedGram = 50000000 / state.simulation.buyPrice;
@@ -926,7 +981,7 @@ function updateSimulation() {
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('buy');
-        updateSimulationCardValues(node, markedGram, currentGram, gramDiff, profitLoss);
+        updateSimulationCardValues('buy', node, markedGram, currentGram, gramDiff, profitLoss);
 
         if (dom.simulationStatus) {
             updateSimulationStatus(markedGram, profitLoss, 'buy');
@@ -941,7 +996,7 @@ function updateSimulation() {
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('sell');
-        updateSimulationCardValues(node, markedGram, currentGram, gramDiff, profitLoss);
+        updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
 
         if (dom.simulationStatus) {
             updateSimulationStatus(markedGram, profitLoss, 'sell');
@@ -966,7 +1021,7 @@ function saveSimulationToStorage() {
         }));
         state.lastSimulationStorageKey = key;
         state.simulationStorageLastSavedAt = now;
-        debugLog('💾 Simulasi disimpan ke localStorage');
+        debugLog('Simulasi disimpan ke localStorage');
     } catch (e) {
         console.error('Gagal menyimpan simulasi:', e);
     }
@@ -982,7 +1037,7 @@ function loadSimulationFromStorage() {
                 state.simulation = parsed.simulation;
                 state.lastSimulationStorageKey = getSimulationStorageKey();
                 state.simulationStorageLastSavedAt = Number(parsed.timestamp) || Date.now();
-                debugLog('📂 Simulasi dimuat dari localStorage:', state.simulation);
+                debugLog('Simulasi dimuat dari localStorage:', state.simulation);
 
                 const timestampEl = dom.simulationTimestamp;
                 if (timestampEl) {
@@ -1032,6 +1087,8 @@ function clearSimulation() {
     oldSimulations.forEach(sim => sim.remove());
     state.simulationNodes.buy = null;
     state.simulationNodes.sell = null;
+    state.simulationSlots.buy = null;
+    state.simulationSlots.sell = null;
 
     if (dom.noSimulation) dom.noSimulation.style.display = 'block';
     if (dom.markBuyBtn) dom.markBuyBtn.classList.remove('simulation-active');
@@ -1052,7 +1109,7 @@ function clearSimulation() {
             </p>`;
     }
 
-    debugLog('🗑️ Simulasi dihapus');
+    debugLog('Simulasi dihapus');
 }
 
 /* ================= FUNGSI BARU: UPDATE STATUS SIMULASI ================= */
@@ -1106,48 +1163,45 @@ function updateSimulationStatus(markedGram, profitLoss, mode) {
 /* ================= TIMERS ================= */
 function resetCountdown() {
     state.countdown = 60;
-    if (dom.countdown) dom.countdown.textContent = state.countdown + 's';
-    if (dom.countdownBar) dom.countdownBar.style.width = '100%';
-
-    if (state.countdownTimer) clearInterval(state.countdownTimer);
-
-    state.countdownTimer = setInterval(() => {
-        state.countdown--;
-        if (dom.countdown) dom.countdown.textContent = state.countdown + 's';
-        if (dom.countdownBar) dom.countdownBar.style.width = (state.countdown / 60 * 100) + '%';
-
-        if (state.countdown <= 0) {
-            state.countdown = 0;
-            if (dom.countdown) dom.countdown.textContent = '0s';
-            if (dom.countdownBar) dom.countdownBar.style.width = '0%';
-            clearInterval(state.countdownTimer);
-            state.countdownTimer = null;
-            if (!state.isFetching) {
-                fetchHarga();
-            }
-        }
-    }, 1000);
+    state.countdownExpiredTriggered = false;
+    updateCountdownDisplay();
 }
 
 function startTimers() {
-    if (state.secondChecker) {
-        clearInterval(state.secondChecker);
+    if (state.timerTicker) {
+        clearInterval(state.timerTicker);
+    }
+    updateCountdownDisplay();
+    state.timerTicker = setInterval(tickTimers, 1000);
+}
+
+function tickTimers() {
+    if (state.countdown > 0) {
+        state.countdown--;
+        updateCountdownDisplay();
     }
 
-    state.secondChecker = setInterval(() => {
-        const now = new Date();
-        if (now.getSeconds() === 1 && !state.isFetching) {
-            debugLog('⏰ Auto-fetch detik 1');
-
-            state.isAutoFetching = true;
-            state.isRetrying = true;
-            state.retryCount = 0;
-            state.targetMinute = null;
-            clearRetryTimeout();
-
+    if (state.countdown <= 0 && !state.countdownExpiredTriggered) {
+        state.countdown = 0;
+        state.countdownExpiredTriggered = true;
+        updateCountdownDisplay();
+        if (!state.isFetching) {
             fetchHarga();
         }
-    }, 1000);
+    }
+
+    const now = new Date();
+    if (now.getSeconds() === 1 && !state.isFetching) {
+        debugLog('Auto-fetch detik 1');
+
+        state.isAutoFetching = true;
+        state.isRetrying = true;
+        state.retryCount = 0;
+        state.targetMinute = null;
+        clearRetryTimeout();
+
+        fetchHarga();
+    }
 }
 
 /* ================= INITIAL SETUP ================= */
@@ -1157,3 +1211,4 @@ if (localStorage.getItem('darkMode') === 'true') {
     window.matchMedia('(prefers-color-scheme: dark)').matches) {
     document.documentElement.classList.add('dark');
 }
+

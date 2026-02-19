@@ -6,7 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Emas</title>
 
-    <!-- CDN Tailwind -->
+    <!-- Tailwind (runtime config diperkecil untuk mengurangi compile cost di client) -->
+    <script>
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = {
+            darkMode: "class",
+        };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- CSS -->
@@ -22,69 +28,6 @@
     <link rel="preconnect" href="https://s.tradingview.com">
     <link rel="preconnect" href="https://cdn.tailwindcss.com">
 
-    <!-- Tailwind Config -->
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: "#eff6ff",
-                            100: "#dbeafe",
-                            600: "#2563eb",
-                            700: "#1d4ed8",
-                        },
-                        secondary: {
-                            50: "#fffbeb",
-                            100: "#fef3c7",
-                            500: "#f59e0b",
-                            600: "#d97706",
-                        },
-                        success: {
-                            50: "#f0fdf4",
-                            100: "#dcfce7",
-                            500: "#22c55e",
-                            600: "#16a34a",
-                        },
-                        danger: {
-                            50: "#fef2f2",
-                            100: "#fee2e2",
-                            500: "#ef4444",
-                            600: "#dc2626",
-                        }
-                    },
-                    fontFamily: {
-                        'sans': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-                    },
-                    fontSize: {
-                        'xxs': '0.625rem',
-                        'xxxs': '0.5rem',
-                    },
-                    animation: {
-                        'pulse-subtle': 'pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        'fade-in': 'fade-in 0.3s ease-out',
-                        'slide-up': 'slide-up 0.2s ease-out',
-                        'spin-slow': 'spin 1.5s linear infinite',
-                    },
-                    keyframes: {
-                        'pulse-subtle': {
-                            '0%, 100%': { opacity: 1 },
-                            '50%': { opacity: 0.85 },
-                        },
-                        'fade-in': {
-                            '0%': { opacity: 0 },
-                            '100%': { opacity: 1 },
-                        },
-                        'slide-up': {
-                            '0%': { transform: 'translateY(4px)', opacity: 0 },
-                            '100%': { transform: 'translateY(0)', opacity: 1 },
-                        }
-                    }
-                },
-            },
-        };
-    </script>
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300 min-h-screen">
@@ -94,22 +37,22 @@
             class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden animate-fade-in">
             <div id="dashboardGrid" class="grid grid-cols-4 min-h-[95vh]">
                 <!-- LEFT PANEL - 3/4 width -->
-                <div id="leftPanel" class="col-span-3 flex flex-col">
+                <div id="leftPanel" class="dashboard-main-panel col-span-3 flex flex-col">
                     <!-- ROW 1: Header Time & Controls -->
-                    <div class="grid grid-cols-3 h-24 row-divider">
+                    <div class="dashboard-header-row grid grid-cols-3 h-24 row-divider">
                         <!-- TIME.IS iframe -->
-                        <div class="border-r border-subtle p-1 content-fit">
+                        <div class="header-time-col border-r border-subtle p-1 content-fit">
                             <div class="glass-card rounded-lg overflow-hidden relative h-full card-hover card-elevated">
                                 <iframe id="timeIframe" src="https://time.is/Jakarta"
                                     class="absolute top-[-180%] left-1/2 w-[145%] h-[190%] -translate-x-1/2 translate-y-[50%]"
-                                    title="Waktu Jakarta"></iframe>
+                                    title="Waktu Jakarta" loading="lazy" fetchpriority="low"></iframe>
                             </div>
                         </div>
 
                         <!-- Controls & Update Info -->
-                        <div class="col-span-2 border-r border-subtle p-2 content-fit">
+                        <div class="header-controls-col col-span-2 border-r border-subtle p-2 content-fit">
                             <div class="h-full flex items-center">
-                                <div class="w-full grid grid-cols-3 gap-1.5 items-center">
+                                <div class="header-controls-grid w-full grid grid-cols-3 gap-1.5 items-center">
                                     <!-- Update Info Panel -->
                                     <div class="col-span-2">
                                         <div
@@ -243,7 +186,7 @@
                     </div>
 
                     <!-- ROW 2: Harga Beli & Harga Jual -->
-                    <div class="grid grid-cols-2 h-28">
+                    <div class="price-row grid grid-cols-2 h-28">
                         <!-- Harga Beli Card -->
                         <div class=" border-subtle p-1 content-fit">
                             <div
@@ -306,11 +249,11 @@
                     </div>
 
                     <!-- ROW 3: Spread + Cuan -->
-                    <div class="p-2 min-h-0 row-divider">
-                        <div class="grid grid-cols-5 gap-1.5 content-fit">
+                    <div class="stats-row p-2 min-h-0 row-divider">
+                        <div class="stats-grid grid grid-cols-5 gap-1.5 content-fit">
                             <!-- Spread Info -->
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-spread-card glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
                                 <div class="flex items-center mb-1.5">
                                     <div
                                         class="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 mr-1.5 flex-shrink-0">
@@ -399,7 +342,7 @@
                     </div>
 
                     <!-- ROW 4: Area Simulasi -->
-                    <div class="p-2 min-h-0 flex-1">
+                    <div class="simulation-row p-2 min-h-0 flex-1">
                         <div class="text-center mb-2">
                             <div
                                 class="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 mb-1.5">
@@ -414,7 +357,7 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="simulation-main-grid grid grid-cols-2 gap-2">
                             <!-- Panel Kiri: Kontrol Simulasi -->
                             <div class="flex flex-col">
                                 <div
@@ -543,7 +486,7 @@
                 </div>
 
                 <!-- RIGHT PANEL - Trading View iframe (TELAH DIPERBAIKI) -->
-                <div id="rightPanel" class="border-l border-subtle relative">
+                <div id="rightPanel" class="dashboard-side-panel border-l border-subtle relative">
                     <!-- Chart Width Controls -->
                     <div class="absolute top-1 right-1 z-10 flex space-x-1">
                         <button id="chartWidthBtn"
@@ -602,7 +545,7 @@
         </div>
 
         <!-- Footer Status Bar -->
-        <div class="mt-1.5 flex items-center justify-between text-xxs text-gray-500 dark:text-gray-400 px-1">
+        <div class="status-footer mt-1.5 flex items-center justify-between text-xxs text-gray-500 dark:text-gray-400 px-1">
             <div class="flex items-center">
                 <div class="status-indicator bg-green-500 mr-1.5"></div>
                 <span>Dashboard Emas</span>
