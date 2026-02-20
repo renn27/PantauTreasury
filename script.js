@@ -390,12 +390,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dom.accordionToggleBtn && dom.accordionContent && dom.accordionChevron) {
         dom.accordionToggleBtn.addEventListener('click', () => {
             const isHidden = dom.accordionContent.classList.contains('hidden');
-            
+
             if (isHidden) {
                 // Open accordion
                 dom.accordionContent.classList.remove('hidden');
                 dom.accordionChevron.classList.add('rotated');
-                
+
                 // Animasi smooth via class (opsional, bisa pakai CSS transition)
                 dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
             } else {
@@ -1018,7 +1018,7 @@ function updateManualPricePreview() {
     clearTimeout(previewTimeout);
     previewTimeout = setTimeout(() => {
         if (!dom.manualBuyPricePreview || !dom.manualSellPricePreview) return;
-        
+
         const gram = parsePositiveFloat(dom.manualGramInput?.value || '');
         if (!gram) {
             dom.manualBuyPricePreview.textContent = '-';
@@ -1096,7 +1096,7 @@ function updateSimulation() {
         state.simulation.gram = markedGram;
         const currentGram = SIMULATION_SELL_BASE / sell;
         const gramDiff = markedGram - currentGram;
-        const profitLoss = (markedGram * sell) - SIMULATION_SELL_BASE;
+        const profitLoss = gramDiff * sell;
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('buy');
@@ -1111,8 +1111,7 @@ function updateSimulation() {
         state.simulation.gram = markedGram;
         const currentGram = SIMULATION_BUY_BASE / buy;
         const gramDiff = currentGram - markedGram;
-        const profitLoss = SIMULATION_BUY_BASE - (markedGram * buy);
-
+        const profitLoss = gramDiff * sell;
         saveSimulationToStorage();
         const node = ensureSimulationNode('sell');
         updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
