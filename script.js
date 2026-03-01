@@ -103,8 +103,8 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
     hour12: false
 }).format;
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
-const SIMULATION_BUY_BASE = 50000000;
-const SIMULATION_SELL_BASE = 48325000;
+const SIMULATION_BUY_BASE = 60000000;
+const SIMULATION_SELL_BASE = 58005000;
 const DEBUG = false;
 
 function debugLog(...args) {
