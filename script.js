@@ -924,7 +924,7 @@ function ensureSimulationNode(mode) {
             ? `
         <div class="grid grid-cols-2 gap-2">
             <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Beli (50jt)</p>
+                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Beli (60jt)</p>
                 <p data-slot="markedGram" class="text-base font-bold text-green-600 dark:text-green-400 font-numeric">-</p>
             </div>
             <div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
@@ -945,7 +945,7 @@ function ensureSimulationNode(mode) {
             : `
         <div class="grid grid-cols-2 gap-2">
             <div class="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Jual (48.325jt)</p>
+                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Jual (58.005jt)</p>
                 <p data-slot="markedGram" class="text-base font-bold text-red-600 dark:text-red-400 font-numeric">-</p>
             </div>
             <div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
