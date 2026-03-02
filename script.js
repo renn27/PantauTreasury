@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'simulationStatus', 'markBuyBtn', 'markSellBtn',
         'refreshApiBtn', 'themeText', 'bigRefreshBtn',
         'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
-        'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
+        'leftPanel', 'rightPanel', 'clearSimulationBtn', 'saveTradeBtn', 'simulationTimestamp',
         'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
         'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
         'manualBuyPricePreview', 'manualSellPricePreview',
@@ -573,6 +573,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.exitFullscreen();
         }
     });
+
+    // Tombol Save
+    dom.saveTradeBtn?.addEventListener("click", saveTradingToDatabase)
 
     // Start timers
     startTimers();
@@ -1079,6 +1082,10 @@ function updateSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.remove('hidden');
 
+    if (dom.saveTradeBtn) {
+        dom.saveTradeBtn.classList.remove("hidden")
+    }
+
     // Tampilkan accordion manual gram jika ada simulasi aktif
     if (dom.manualGramAccordion) {
         dom.manualGramAccordion.classList.remove('hidden');
@@ -1224,6 +1231,8 @@ function clearSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.add('hidden');
 
+    dom.saveTradeBtn?.classList.add("hidden")
+
     const timestampEl = dom.simulationTimestamp;
     if (timestampEl) {
         timestampEl.textContent = 'Update terakhir : -';
@@ -1329,6 +1338,130 @@ function tickTimers() {
 
         fetchHarga();
     }
+}
+
+async function saveTradingToDatabase() {
+    if (!state.simulation.mode) {
+        // Jika tidak ada simulasi, kasih efek error cepat
+        errorFeedback(dom.saveTradeBtn);
+        return;
+    }
+
+    // Simpan referensi tombol dan konten asli
+    const saveBtn = dom.saveTradeBtn;
+    const originalContent = saveBtn.innerHTML;
+
+    // Ubah tombol menjadi "Menyimpan..." dengan spinner
+    saveBtn.innerHTML = `
+        <span class="flex items-center gap-1 px-1">
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="text-xs">Menyimpan</span>
+        </span>
+    `;
+    saveBtn.disabled = true;
+    saveBtn.classList.add('opacity-90', 'cursor-wait');
+
+    const mode = state.simulation.mode;
+    const gram = state.simulation.gram;
+    const price = mode === "buy" ? state.simulation.buyPrice : state.simulation.sellPrice;
+    const buy = state.currentBuy;
+    const sell = state.currentSell;
+
+    let currentGram, gramDiff, profitLoss;
+
+    if (mode === "buy") {
+        currentGram = SIMULATION_SELL_BASE / sell;
+        gramDiff = gram - currentGram;
+        profitLoss = gramDiff * sell;
+    } else {
+        currentGram = SIMULATION_BUY_BASE / buy;
+        gramDiff = currentGram - gram;
+        profitLoss = gramDiff * sell;
+    }
+
+    const payload = {
+        mode: mode.toUpperCase(),
+        waktu: new Date().toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta"
+        }),
+        harga: Math.round(price),
+        harga_buy_realtime: Math.round(buy),
+        harga_sell_realtime: Math.round(sell),
+        gram: Number(gram.toFixed(4)),
+        selisih_gram: Number(gramDiff.toFixed(4)),
+        profit_loss: Math.round(profitLoss)
+    };
+
+    try {
+        const response = await fetch("https://script.google.com/macros/s/AKfycbxfldyX2pupfiwgGekeMg_HrARNgWI802WXspZLQmSauxYHJ-VBUfSNTYNpw6lmduac4A/exec", {
+            method: "POST",
+            body: JSON.stringify(payload),
+            mode: 'no-cors'
+        });
+
+        // SUKSES - Ubah tombol menjadi hijau dengan centang
+        saveBtn.innerHTML = `
+            <span class="flex items-center gap-1 px-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-xs">Tersimpan</span>
+            </span>
+        `;
+        saveBtn.classList.remove('opacity-90', 'cursor-wait');
+        saveBtn.classList.add('bg-green-600', 'text-white', 'dark:bg-green-700', 'scale-105');
+
+        // Kembalikan ke ikon setelah 1.5 detik
+        setTimeout(() => {
+            saveBtn.innerHTML = originalContent;
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('bg-green-600', 'text-white', 'dark:bg-green-700', 'scale-105');
+        }, 1500);
+
+    } catch (err) {
+        console.error("Gagal simpan", err);
+
+        // GAGAL - Ubah tombol menjadi merah dengan X
+        saveBtn.innerHTML = `
+            <span class="flex items-center gap-1 px-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span class="text-xs">Gagal</span>
+            </span>
+        `;
+        saveBtn.classList.remove('opacity-90', 'cursor-wait');
+        saveBtn.classList.add('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
+
+        // Kembalikan ke ikon setelah 1.5 detik
+        setTimeout(() => {
+            saveBtn.innerHTML = originalContent;
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
+        }, 1500);
+    }
+}
+
+/* ================= FUNGSI HELPER: ERROR FEEDBACK CEPAT ================= */
+function errorFeedback(btn) {
+    const originalContent = btn.innerHTML;
+
+    // Ganti dengan X merah sebentar
+    btn.innerHTML = `
+        <span class="flex items-center gap-1 px-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </span>
+    `;
+    btn.classList.add('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
+
+    setTimeout(() => {
+        btn.innerHTML = originalContent;
+        btn.classList.remove('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
+    }, 800);
 }
 
 /* ================= INITIAL SETUP ================= */
