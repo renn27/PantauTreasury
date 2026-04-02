@@ -224,12 +224,12 @@ function renderCachedData() {
     if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
 
     // Hitung gram
-    const gramBeli = (SIMULATION_BUY_BASE / cached.buy).toFixed(4);
-    const gramJual = (SIMULATION_SELL_BASE / cached.sell).toFixed(4);
+    const gramBeli = floor4(SIMULATION_BUY_BASE / cached.buy);
+    const gramJual = floor4(SIMULATION_SELL_BASE / cached.sell);
     const nilaiJual = (SIMULATION_BUY_BASE / cached.buy * cached.sell);
     const cuan = nilaiJual - SIMULATION_SELL_BASE;
 
-    if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli} g`;
+    if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
     if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
     if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
 
@@ -862,12 +862,12 @@ function updateUI(data) {
         if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
 
         // Gram calculations
-        const gramBeli = (SIMULATION_BUY_BASE / buy).toFixed(4);
-        const gramJual = (SIMULATION_SELL_BASE / sell).toFixed(4);
+        const gramBeli = floor4(SIMULATION_BUY_BASE / buy);
+        const gramJual = floor4(SIMULATION_SELL_BASE / sell);
         const nilaiJual = (SIMULATION_BUY_BASE / buy * sell);
         const cuan = nilaiJual - SIMULATION_SELL_BASE;
 
-        if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli} g`;
+        if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
         if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
         if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
 
@@ -1099,9 +1099,10 @@ function updateSimulation() {
     state.simulationSlots[inactiveMode] = null;
 
     if (mode === 'buy' && state.simulation.buyPrice) {
-        const markedGram = SIMULATION_BUY_BASE / state.simulation.buyPrice;
+
+        const markedGram = floor4(SIMULATION_BUY_BASE / state.simulation.buyPrice);
         state.simulation.gram = markedGram;
-        const currentGram = SIMULATION_SELL_BASE / sell;
+        const currentGram = floor4(SIMULATION_SELL_BASE / sell);
         const gramDiff = markedGram - currentGram;
         const profitLoss = gramDiff * sell;
 
@@ -1114,9 +1115,10 @@ function updateSimulation() {
         }
 
     } else if (mode === 'sell' && state.simulation.sellPrice) {
-        const markedGram = SIMULATION_SELL_BASE / state.simulation.sellPrice;
+
+        const markedGram = floor4(SIMULATION_SELL_BASE / state.simulation.sellPrice);
         state.simulation.gram = markedGram;
-        const currentGram = SIMULATION_BUY_BASE / buy;
+        const currentGram = floor4(SIMULATION_BUY_BASE / buy);
         const gramDiff = currentGram - markedGram;
         const profitLoss = gramDiff * sell;
         saveSimulationToStorage();
@@ -1389,8 +1391,8 @@ async function saveTradingToDatabase() {
         harga: Math.round(price),
         harga_buy_realtime: Math.round(buy),
         harga_sell_realtime: Math.round(sell),
-        gram: Number(gram.toFixed(4)),
-        selisih_gram: Number(gramDiff.toFixed(4)),
+        gram: floor4(gram),
+        selisih_gram: floor4(gramDiff),
         profit_loss: Math.round(profitLoss)
     };
 
@@ -1445,6 +1447,11 @@ async function saveTradingToDatabase() {
 }
 
 /* ================= FUNGSI HELPER: ERROR FEEDBACK CEPAT ================= */
+
+function floor4(num) {
+    return Math.floor(num * 10000) / 10000;
+}
+
 function errorFeedback(btn) {
     const originalContent = btn.innerHTML;
 
