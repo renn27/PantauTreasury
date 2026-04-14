@@ -919,7 +919,7 @@ function ensureSimulationNode(mode) {
     if (!node) {
         node = document.createElement('div');
         node.id = id;
-        node.className = 'space-y-3 simulation-active animate-fade-in';
+        node.className = 'space-y-3 animate-fade-in';
         node.innerHTML = mode === 'buy'
             ? `
         <div class="grid grid-cols-2 gap-2">
@@ -1275,8 +1275,7 @@ function updateSimulationStatus(markedGram, profitLoss, mode) {
             <div class="flex items-center">
                 <div class="status-indicator ${modeColor} animate-pulse mr-2"></div>
                 <div>
-                    <p class="text-sm font-semibold ${modeTextColor}">${modeText}</p>
-                    <p class="text-xxs text-gray-500 dark:text-gray-400">${priceLabel} yang ditandai</p>
+                    <p class="text-md font-semibold ${modeTextColor}">${modeText}</p>
                 </div>
             </div>
             <div class="text-right">
