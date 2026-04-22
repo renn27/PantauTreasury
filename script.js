@@ -6,6 +6,19 @@ const REQUEST_HEADERS = {
     'Pragma': 'no-cache'
 };
 
+/* Pre-built Headers instance — tidak perlu dibuat ulang setiap fetch */
+const FETCH_HEADERS = new Headers(REQUEST_HEADERS);
+
+/* ================= NAMED CONSTANTS ================= */
+const FETCH_TIMEOUT_MS = 3000;
+const CACHE_LOCAL_TTL_MS = 30000;
+const SIMULATION_TTL_MS = 86400000; // 24 jam
+const SIMULATION_STORAGE_THROTTLE_MS = 5000;
+const SIMULATION_BUY_BASE = 60000000;
+const SIMULATION_SELL_BASE = 58005000;
+const COUNTDOWN_SECONDS = 60;
+const DEBUG = false;
+
 /* ================= INSTANT LOAD ================= */
 const priceCache = {
     data: null,
@@ -40,7 +53,7 @@ try {
     const saved = localStorage.getItem('gold_cache');
     if (saved) {
         const parsed = JSON.parse(saved);
-        if (Date.now() - parsed.timestamp < 30000) {
+        if (Date.now() - parsed.timestamp < CACHE_LOCAL_TTL_MS) {
             priceCache.data = parsed.data;
             priceCache.timestamp = parsed.timestamp;
         }
@@ -49,7 +62,7 @@ try {
 
 /* ================= GLOBAL STATE ================= */
 let state = {
-    countdown: 60,
+    countdown: COUNTDOWN_SECONDS,
     countdownExpiredTriggered: false,
     timerTicker: null,
     fetchController: null,
@@ -85,7 +98,8 @@ let state = {
         sell: null
     },
     priceAnimationTimeoutId: null,
-    priceAnimationFrameId: null
+    priceAnimationFrameId: null,
+    previewTimeout: null
 };
 
 /* ================= DOM CACHE ================= */
@@ -102,13 +116,13 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
     second: '2-digit',
     hour12: false
 }).format;
-const SIMULATION_STORAGE_THROTTLE_MS = 5000;
-const SIMULATION_BUY_BASE = 60000000;
-const SIMULATION_SELL_BASE = 58005000;
-const DEBUG = false;
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
+}
+
+function floor4(num) {
+    return Math.floor(num * 10000) / 10000;
 }
 
 function fastParse(str) {
@@ -158,17 +172,18 @@ function getSimulationStorageKey() {
 function updateCountdownDisplay() {
     if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
     if (dom.countdownBar) {
-        const width = Math.max(0, Math.min(100, (state.countdown / 60) * 100));
+        const width = Math.max(0, Math.min(100, (state.countdown / COUNTDOWN_SECONDS) * 100));
         dom.countdownBar.style.width = `${width}%`;
     }
 }
 
-function setCuanColorClass(isPositive) {
-    if (!dom.cuan) return;
-    dom.cuan.classList.toggle('text-green-600', isPositive);
-    dom.cuan.classList.toggle('dark:text-green-400', isPositive);
-    dom.cuan.classList.toggle('text-red-600', !isPositive);
-    dom.cuan.classList.toggle('dark:text-red-400', !isPositive);
+/* Unified color class setter — menggantikan setCuanColorClass & setProfitColorClass */
+function setProfitColorClass(el, isPositive) {
+    if (!el) return;
+    el.classList.toggle('text-green-600', isPositive);
+    el.classList.toggle('dark:text-green-400', isPositive);
+    el.classList.toggle('text-red-600', !isPositive);
+    el.classList.toggle('dark:text-red-400', !isPositive);
 }
 
 function triggerPriceChangeAnimation() {
@@ -196,6 +211,118 @@ function triggerPriceChangeAnimation() {
     });
 }
 
+/* ================= SHARED: Compute Derived Values ================= */
+function computeDerivedValues(buy, sell) {
+    const spread = buy - sell;
+    const spreadPercent = (spread / buy * 100).toFixed(2);
+    const gramBeli = floor4(SIMULATION_BUY_BASE / buy);
+    const gramJual = floor4(SIMULATION_SELL_BASE / sell);
+    const nilaiJual = (SIMULATION_BUY_BASE / buy * sell);
+    const cuan = nilaiJual - SIMULATION_SELL_BASE;
+    return { spread, spreadPercent, gramBeli, gramJual, nilaiJual, cuan };
+}
+
+/* ================= SHARED: Render Derived Values to DOM ================= */
+function renderDerivedValues(values) {
+    const { spread, spreadPercent, gramBeli, gramJual, nilaiJual, cuan } = values;
+
+    if (dom.spreadNominal) dom.spreadNominal.textContent = formatRupiah(spread);
+    if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
+    if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
+    if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
+    if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
+
+    if (dom.cuan) {
+        dom.cuan.textContent = formatRupiah(cuan);
+        setProfitColorClass(dom.cuan, cuan >= 0);
+    }
+}
+
+/* ================= SHARED: Manual Refresh ================= */
+function triggerManualRefresh() {
+    state.isManualRefresh = true;
+    state.isAutoFetching = false;
+    state.isRetrying = false;
+    state.retryCount = 0;
+    state.targetMinute = null;
+    clearRetryTimeout();
+
+    if (state.fetchController) state.fetchController.abort();
+    fetchHarga();
+}
+
+/* ================= SHARED: Button Feedback ================= */
+function showButtonFeedback(btn, type, duration) {
+    if (!btn) return;
+    const originalContent = btn.innerHTML;
+
+    const icons = {
+        success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />',
+        error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />',
+        loading: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />'
+    };
+
+    const labels = { success: 'Tersimpan', error: 'Gagal', loading: 'Menyimpan' };
+    const spinClass = type === 'loading' ? ' animate-spin' : '';
+    const colorClasses = {
+        success: ['bg-green-600', 'text-white', 'dark:bg-green-700', 'scale-105'],
+        error: ['bg-red-600', 'text-white', 'dark:bg-red-700', 'shake'],
+        loading: ['opacity-90', 'cursor-wait']
+    };
+
+    const label = labels[type] || '';
+    const labelHtml = label ? `<span class="text-xs">${label}</span>` : '';
+
+    btn.innerHTML = `
+        <span class="flex items-center gap-1 px-1">
+            <svg class="w-4 h-4${spinClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                ${icons[type]}
+            </svg>
+            ${labelHtml}
+        </span>
+    `;
+
+    const classes = colorClasses[type] || [];
+    btn.classList.add(...classes);
+
+    if (type === 'loading') {
+        btn.disabled = true;
+        return; // Tidak auto-restore untuk loading
+    }
+
+    setTimeout(() => {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+        btn.classList.remove(...classes);
+    }, duration || 1000);
+}
+
+/* ================= SHARED: Schedule Retry ================= */
+function scheduleRetry(reason) {
+    if (!state.isAutoFetching) return;
+
+    if (state.retryCount >= state.MAX_RETRY) {
+        debugLog(`Max retry reached (${reason}), stopping`);
+        state.isRetrying = false;
+        state.retryCount = 0;
+        state.targetMinute = null;
+        clearRetryTimeout();
+        return;
+    }
+
+    state.retryCount++;
+    const delay = Math.min(2000, 500 + (state.retryCount * 300));
+    debugLog(`Retry ${reason} ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
+
+    clearRetryTimeout();
+    state.retryTimeoutId = setTimeout(() => {
+        state.retryTimeoutId = null;
+        if (state.isAutoFetching && state.isRetrying) {
+            fetchHarga();
+        }
+    }, delay);
+}
+
 /* ================= RENDER CACHED DATA INSTANTLY ================= */
 function renderCachedData() {
     const cached = priceCache.get();
@@ -203,13 +330,16 @@ function renderCachedData() {
 
     debugLog('Rendering cached data');
 
+    const buy = Number(cached.buy);
+    const sell = Number(cached.sell);
+
     // Update harga
-    dom.hargaBeli.textContent = formatRupiah(cached.buy);
-    dom.hargaJual.textContent = formatRupiah(cached.sell);
-    state.lastRenderedBuy = Number(cached.buy);
-    state.lastRenderedSell = Number(cached.sell);
-    state.currentBuy = Number(cached.buy);
-    state.currentSell = Number(cached.sell);
+    dom.hargaBeli.textContent = formatRupiah(buy);
+    dom.hargaJual.textContent = formatRupiah(sell);
+    state.lastRenderedBuy = buy;
+    state.lastRenderedSell = sell;
+    state.currentBuy = buy;
+    state.currentSell = sell;
 
     // Update timestamp
     if (dom.lastUpdate) {
@@ -217,34 +347,16 @@ function renderCachedData() {
         dom.lastUpdate.textContent = formatTimeIdHms(updated);
     }
 
-    // Hitung spread
-    const spread = cached.buy - cached.sell;
-    const spreadPercent = ((spread / cached.buy) * 100).toFixed(2);
-    if (dom.spreadNominal) dom.spreadNominal.textContent = formatRupiah(spread);
-    if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
-
-    // Hitung gram
-    const gramBeli = floor4(SIMULATION_BUY_BASE / cached.buy);
-    const gramJual = floor4(SIMULATION_SELL_BASE / cached.sell);
-    const nilaiJual = (SIMULATION_BUY_BASE / cached.buy * cached.sell);
-    const cuan = nilaiJual - SIMULATION_SELL_BASE;
-
-    if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
-    if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
-    if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
-
-    // Cuan
-    if (dom.cuan) {
-        dom.cuan.textContent = formatRupiah(cuan);
-        setCuanColorClass(cuan >= 0);
-    }
+    // Hitung dan render derived values
+    const values = computeDerivedValues(buy, sell);
+    renderDerivedValues(values);
 
     return true;
 }
 
 /* ================= FUNGSI BARU: HANDLE TOUCH UNTUK TRADING VIEW ================= */
 function fixTradingViewTouch() {
-    const tvIframe = document.getElementById('tvIframe');
+    const tvIframe = dom.tvIframe;
     const chartContainer = document.querySelector('.chart-container');
 
     if (!tvIframe || !chartContainer) return;
@@ -292,6 +404,14 @@ function fixTradingViewTouch() {
         touchVisualState = nextState;
     };
 
+    const resetTouchState = function () {
+        isTouching = false;
+        isHorizontalDrag = false;
+        document.body.classList.remove('chart-touching');
+        setChartTouchVisual('idle');
+        detachBodyTouchMoveLock();
+    };
+
     // Saat mulai menyentuh
     tvIframe.addEventListener('touchstart', function (e) {
         isTouching = true;
@@ -327,22 +447,10 @@ function fixTradingViewTouch() {
     }, { passive: false }); // passive: false PENTING untuk bisa preventDefault
 
     // Saat selesai menyentuh
-    tvIframe.addEventListener('touchend', function (e) {
-        isTouching = false;
-        isHorizontalDrag = false;
-        document.body.classList.remove('chart-touching');
-        setChartTouchVisual('idle');
-        detachBodyTouchMoveLock();
-    });
+    tvIframe.addEventListener('touchend', resetTouchState);
 
     // Saat sentuhan dibatalkan
-    tvIframe.addEventListener('touchcancel', function (e) {
-        isTouching = false;
-        isHorizontalDrag = false;
-        document.body.classList.remove('chart-touching');
-        setChartTouchVisual('idle');
-        detachBodyTouchMoveLock();
-    });
+    tvIframe.addEventListener('touchcancel', resetTouchState);
 }
 
 /* ================= INIT DOM ================= */
@@ -464,17 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateManualPricePreview();
 
     if (dom.refreshApiBtn) {
-        dom.refreshApiBtn.addEventListener('click', () => {
-            state.isManualRefresh = true;
-            state.isAutoFetching = false;
-            state.isRetrying = false;
-            state.retryCount = 0;
-            state.targetMinute = null;
-            clearRetryTimeout();
-
-            if (state.fetchController) state.fetchController.abort();
-            fetchHarga();
-        });
+        dom.refreshApiBtn.addEventListener('click', triggerManualRefresh);
     }
 
     // Big refresh button
@@ -488,22 +586,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         dom.bigRefreshBtn.addEventListener('click', () => {
-            state.isManualRefresh = true;
-            state.isAutoFetching = false;
-            state.isRetrying = false;
-            state.retryCount = 0;
-            state.targetMinute = null;
-            clearRetryTimeout();
-
-            if (state.fetchController) state.fetchController.abort();
-
             if (dom.bigRefreshIcon) {
                 dom.bigRefreshIcon.classList.remove('refresh-spin-once');
                 void dom.bigRefreshIcon.offsetWidth;
                 dom.bigRefreshIcon.classList.add('refresh-spin-once');
             }
-
-            fetchHarga();
+            triggerManualRefresh();
         });
     }
 
@@ -650,31 +738,25 @@ async function fetchHarga() {
     state.fetchController = controller;
     let isTimedOut = false;
 
-    // Timeout 3 detik
+    // Timeout
     const timeoutId = setTimeout(() => {
         isTimedOut = true;
         controller.abort();
-    }, 3000);
+    }, FETCH_TIMEOUT_MS);
 
     try {
         const start = Date.now();
 
-        // Gunakan header yang bisa diatur dari browser
-        const headers = new Headers();
-        Object.entries(REQUEST_HEADERS).forEach(([key, value]) => {
-            headers.set(key, value);
-        });
-
         const res = await fetch('https://api.treasury.id/api/v1/antigrvty/gold/rate', {
             method: 'POST',
             signal: controller.signal,
-            headers: headers,
+            headers: FETCH_HEADERS,
             mode: 'cors',
             credentials: 'omit',
             cache: 'no-store',
+            keepalive: true,
             redirect: 'follow',
-            referrer: window.location.href,
-            referrerPolicy: 'no-referrer-when-downgrade'
+            referrerPolicy: 'no-referrer'
         });
 
         if (!res.ok) {
@@ -730,7 +812,11 @@ async function fetchHarga() {
 
         // Jika dalam mode auto-fetch dan data belum sesuai
         if (state.isAutoFetching && !isCurrentMinute) {
-            handleRetryLogic(now);
+            if (!state.targetMinute) {
+                state.targetMinute = now.getMinutes();
+            }
+            state.isRetrying = true;
+            scheduleRetry('stale-data');
         }
 
     } catch (err) {
@@ -742,12 +828,12 @@ async function fetchHarga() {
             }
 
             if (dom.lastUpdate) {
-                dom.lastUpdate.textContent = 'Timeout (3s)';
+                dom.lastUpdate.textContent = `Timeout (${FETCH_TIMEOUT_MS / 1000}s)`;
             }
             debugLog('Fetch timeout');
 
             if (!state.isManualRefresh) {
-                handleFetchError('timeout');
+                scheduleRetry('timeout');
             } else {
                 setTimeout(() => {
                     const cached = priceCache.get();
@@ -767,7 +853,7 @@ async function fetchHarga() {
         }
 
         if (!state.isManualRefresh) {
-            handleFetchError('other');
+            scheduleRetry('error');
         } else {
             state.isManualRefresh = false;
         }
@@ -779,59 +865,6 @@ async function fetchHarga() {
         if (state.fetchSeq === fetchSeq) {
             state.isFetching = false;
         }
-    }
-}
-
-/* ================= LOGIKA RETRY UNTUK AUTO-FETCH SAJA ================= */
-function handleRetryLogic(now) {
-    if (!state.targetMinute) {
-        state.targetMinute = now.getMinutes();
-    }
-
-    if (state.retryCount >= state.MAX_RETRY) {
-        debugLog('Max retry reached, stopping');
-        state.isRetrying = false;
-        state.retryCount = 0;
-        state.targetMinute = null;
-        clearRetryTimeout();
-        return;
-    }
-
-    state.retryCount++;
-    const delay = Math.min(2000, 500 + (state.retryCount * 300));
-    debugLog(`Retry ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
-
-    clearRetryTimeout();
-    state.retryTimeoutId = setTimeout(() => {
-        state.retryTimeoutId = null;
-        if (state.isAutoFetching && state.isRetrying) {
-            fetchHarga();
-        }
-    }, delay);
-}
-
-/* ================= HANDLE ERROR UNTUK AUTO-FETCH SAJA ================= */
-function handleFetchError(errorType) {
-    if (state.isAutoFetching && state.isRetrying) {
-        if (state.retryCount >= state.MAX_RETRY) {
-            state.isRetrying = false;
-            state.retryCount = 0;
-            state.targetMinute = null;
-            clearRetryTimeout();
-            return;
-        }
-
-        state.retryCount++;
-        const delay = Math.min(2000, 500 + (state.retryCount * 300));
-        debugLog(`Retry after ${errorType} ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
-
-        clearRetryTimeout();
-        state.retryTimeoutId = setTimeout(() => {
-            state.retryTimeoutId = null;
-            if (state.isAutoFetching && state.isRetrying) {
-                fetchHarga();
-            }
-        }, delay);
     }
 }
 
@@ -855,27 +888,9 @@ function updateUI(data) {
         // Animation
         triggerPriceChangeAnimation();
 
-        // Spread
-        const spread = buy - sell;
-        const spreadPercent = (spread / buy * 100).toFixed(2);
-        if (dom.spreadNominal) dom.spreadNominal.textContent = formatRupiah(spread);
-        if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
-
-        // Gram calculations
-        const gramBeli = floor4(SIMULATION_BUY_BASE / buy);
-        const gramJual = floor4(SIMULATION_SELL_BASE / sell);
-        const nilaiJual = (SIMULATION_BUY_BASE / buy * sell);
-        const cuan = nilaiJual - SIMULATION_SELL_BASE;
-
-        if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
-        if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
-        if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
-
-        // Cuan
-        if (dom.cuan) {
-            dom.cuan.textContent = formatRupiah(cuan);
-            setCuanColorClass(cuan >= 0);
-        }
+        // Compute dan render derived values
+        const values = computeDerivedValues(buy, sell);
+        renderDerivedValues(values);
 
         state.lastRenderedBuy = buy;
         state.lastRenderedSell = sell;
@@ -897,56 +912,18 @@ function updateUI(data) {
 }
 
 /* ================= SIMULATION ================= */
-function setProfitColorClass(el, isPositive) {
-    if (!el) return;
-    el.classList.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400');
-    if (isPositive) {
-        el.classList.add('text-green-600', 'dark:text-green-400');
-    } else {
-        el.classList.add('text-red-600', 'dark:text-red-400');
-    }
-}
+function buildSimulationTemplate(mode) {
+    const isBuy = mode === 'buy';
+    const gradientFrom = isBuy ? 'green' : 'red';
+    const gradientTo = isBuy ? 'emerald' : 'rose';
+    const colorClass = isBuy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+    const baseLabel = isBuy ? 'Gram Beli (60jt)' : 'Gram Jual (58.005jt)';
 
-function ensureSimulationNode(mode) {
-    if (!dom.simulationResults) return null;
-
-    let node = state.simulationNodes[mode];
-    const id = mode === 'buy' ? 'buySimulation' : 'sellSimulation';
-    if (!node || !node.isConnected) {
-        node = document.getElementById(id);
-    }
-
-    if (!node) {
-        node = document.createElement('div');
-        node.id = id;
-        node.className = 'space-y-3 animate-fade-in';
-        node.innerHTML = mode === 'buy'
-            ? `
+    return `
         <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Beli (60jt)</p>
-                <p data-slot="markedGram" class="text-base font-bold text-green-600 dark:text-green-400 font-numeric">-</p>
-            </div>
-            <div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Sekarang</p>
-                <p data-slot="currentGram" class="text-base font-bold text-gray-900 dark:text-gray-100 font-numeric">-</p>
-            </div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Selisih Gram</p>
-                <p data-slot="gramDiff" class="text-base font-bold font-numeric">-</p>
-            </div>
-            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Profit / Loss</p>
-                <p data-slot="profitLoss" class="text-lg font-bold font-numeric">-</p>
-            </div>
-        </div>`
-            : `
-        <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 p-2.5 rounded-lg">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Jual (58.005jt)</p>
-                <p data-slot="markedGram" class="text-base font-bold text-red-600 dark:text-red-400 font-numeric">-</p>
+            <div class="bg-gradient-to-br from-${gradientFrom}-50 to-${gradientTo}-50 dark:from-${gradientFrom}-900/20 dark:to-${gradientTo}-900/20 p-2.5 rounded-lg">
+                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">${baseLabel}</p>
+                <p data-slot="markedGram" class="text-base font-bold ${colorClass} font-numeric">-</p>
             </div>
             <div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Sekarang</p>
@@ -963,6 +940,22 @@ function ensureSimulationNode(mode) {
                 <p data-slot="profitLoss" class="text-lg font-bold font-numeric">-</p>
             </div>
         </div>`;
+}
+
+function ensureSimulationNode(mode) {
+    if (!dom.simulationResults) return null;
+
+    let node = state.simulationNodes[mode];
+    const id = mode === 'buy' ? 'buySimulation' : 'sellSimulation';
+    if (!node || !node.isConnected) {
+        node = document.getElementById(id);
+    }
+
+    if (!node) {
+        node = document.createElement('div');
+        node.id = id;
+        node.className = 'space-y-3 animate-fade-in';
+        node.innerHTML = buildSimulationTemplate(mode);
         dom.simulationResults.appendChild(node);
     }
 
@@ -1016,10 +1009,9 @@ function setManualGramError(message = '') {
     dom.manualGramError.classList.add('hidden');
 }
 
-let previewTimeout;
 function updateManualPricePreview() {
-    clearTimeout(previewTimeout);
-    previewTimeout = setTimeout(() => {
+    clearTimeout(state.previewTimeout);
+    state.previewTimeout = setTimeout(() => {
         if (!dom.manualBuyPricePreview || !dom.manualSellPricePreview) return;
 
         const gram = parsePositiveFloat(dom.manualGramInput?.value || '');
@@ -1160,7 +1152,7 @@ function loadSimulationFromStorage() {
         const saved = localStorage.getItem('gold_simulation');
         if (saved) {
             const parsed = JSON.parse(saved);
-            if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+            if (Date.now() - parsed.timestamp < SIMULATION_TTL_MS) {
                 state.simulation = parsed.simulation;
                 state.lastSimulationStorageKey = getSimulationStorageKey();
                 state.simulationStorageLastSavedAt = Number(parsed.timestamp) || Date.now();
@@ -1299,7 +1291,7 @@ function updateSimulationStatus(markedGram, profitLoss, mode) {
 
 /* ================= TIMERS ================= */
 function resetCountdown() {
-    state.countdown = 60;
+    state.countdown = COUNTDOWN_SECONDS;
     state.countdownExpiredTriggered = false;
     updateCountdownDisplay();
 }
@@ -1344,25 +1336,15 @@ function tickTimers() {
 async function saveTradingToDatabase() {
     if (!state.simulation.mode) {
         // Jika tidak ada simulasi, kasih efek error cepat
-        errorFeedback(dom.saveTradeBtn);
+        showButtonFeedback(dom.saveTradeBtn, 'error', 800);
         return;
     }
 
-    // Simpan referensi tombol dan konten asli
+    // Simpan referensi tombol
     const saveBtn = dom.saveTradeBtn;
-    const originalContent = saveBtn.innerHTML;
 
     // Ubah tombol menjadi "Menyimpan..." dengan spinner
-    saveBtn.innerHTML = `
-        <span class="flex items-center gap-1 px-1">
-            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span class="text-xs">Menyimpan</span>
-        </span>
-    `;
-    saveBtn.disabled = true;
-    saveBtn.classList.add('opacity-90', 'cursor-wait');
+    showButtonFeedback(saveBtn, 'loading');
 
     const mode = state.simulation.mode;
     const gram = state.simulation.gram;
@@ -1402,78 +1384,19 @@ async function saveTradingToDatabase() {
             mode: 'no-cors'
         });
 
-        // SUKSES - Ubah tombol menjadi hijau dengan centang
-        saveBtn.innerHTML = `
-            <span class="flex items-center gap-1 px-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                <span class="text-xs">Tersimpan</span>
-            </span>
-        `;
-        saveBtn.classList.remove('opacity-90', 'cursor-wait');
-        saveBtn.classList.add('bg-green-600', 'text-white', 'dark:bg-green-700', 'scale-105');
-
-        // Kembalikan ke ikon setelah 1.5 detik
-        setTimeout(() => {
-            saveBtn.innerHTML = originalContent;
-            saveBtn.disabled = false;
-            saveBtn.classList.remove('bg-green-600', 'text-white', 'dark:bg-green-700', 'scale-105');
-        }, 1500);
+        // SUKSES
+        showButtonFeedback(saveBtn, 'success', 1500);
 
     } catch (err) {
         console.error("Gagal simpan", err);
 
-        // GAGAL - Ubah tombol menjadi merah dengan X
-        saveBtn.innerHTML = `
-            <span class="flex items-center gap-1 px-1">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span class="text-xs">Gagal</span>
-            </span>
-        `;
-        saveBtn.classList.remove('opacity-90', 'cursor-wait');
-        saveBtn.classList.add('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
-
-        // Kembalikan ke ikon setelah 1.5 detik
-        setTimeout(() => {
-            saveBtn.innerHTML = originalContent;
-            saveBtn.disabled = false;
-            saveBtn.classList.remove('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
-        }, 1500);
+        // GAGAL
+        showButtonFeedback(saveBtn, 'error', 1500);
     }
 }
 
-/* ================= FUNGSI HELPER: ERROR FEEDBACK CEPAT ================= */
-
-function floor4(num) {
-    return Math.floor(num * 10000) / 10000;
-}
-
-function errorFeedback(btn) {
-    const originalContent = btn.innerHTML;
-
-    // Ganti dengan X merah sebentar
-    btn.innerHTML = `
-        <span class="flex items-center gap-1 px-1">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </span>
-    `;
-    btn.classList.add('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
-
-    setTimeout(() => {
-        btn.innerHTML = originalContent;
-        btn.classList.remove('bg-red-600', 'text-white', 'dark:bg-red-700', 'shake');
-    }, 800);
-}
-
 /* ================= INITIAL SETUP ================= */
-if (localStorage.getItem('darkMode') === 'true') {
-    document.documentElement.classList.add('dark');
-} else if (!localStorage.getItem('darkMode') &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches) {
+if (localStorage.getItem('darkMode') === 'true' ||
+    (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
 }

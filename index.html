@@ -15,9 +15,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Preconnect untuk resource eksternal -->
+    <!-- Preconnect + dns-prefetch fallback untuk resource eksternal -->
     <link rel="preconnect" href="https://api.treasury.id">
+    <link rel="dns-prefetch" href="https://api.treasury.id">
     <link rel="preconnect" href="https://s.tradingview.com">
+    <link rel="dns-prefetch" href="https://s.tradingview.com">
+    <link rel="dns-prefetch" href="https://time.is">
+    <link rel="dns-prefetch" href="https://script.google.com">
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300 min-h-screen">
@@ -630,7 +634,7 @@
                 <div class="status-indicator bg-green-500 mr-1.5"></div>
                 <span>Dashboard Emas</span>
                 <span class="mx-1.5">•</span>
-                <span>v26.04.14</span>
+                <span>v26.04.22</span>
             </div>
             <div class="flex items-center">
                 <span>Data: Treasury.id API</span>
@@ -641,7 +645,7 @@
     </div>
 
     <!-- Script -->
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 
 </html>
