@@ -504,15 +504,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 dom.accordionContent.classList.remove('hidden');
                 dom.accordionChevron.classList.add('rotated');
 
-                // Animasi smooth via class (opsional, bisa pakai CSS transition)
+                // Force reflow to enable transition after removing display:none
+                void dom.accordionContent.offsetWidth;
+
+                // Animasi smooth
                 dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
+                dom.accordionContent.style.opacity = '1';
             } else {
                 // Close accordion
+                dom.accordionChevron.classList.remove('rotated');
+                
+                // Ensure current height is set before shrinking
+                dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
+                void dom.accordionContent.offsetWidth; // Force reflow
+                
                 dom.accordionContent.style.maxHeight = '0px';
+                dom.accordionContent.style.opacity = '0';
+                
                 setTimeout(() => {
-                    dom.accordionContent.classList.add('hidden');
-                    dom.accordionChevron.classList.remove('rotated');
-                    dom.accordionContent.style.maxHeight = '';
+                    // Only add hidden if it hasn't been reopened
+                    if (dom.accordionContent.style.opacity === '0') {
+                        dom.accordionContent.classList.add('hidden');
+                    }
                 }, 300); // Sama dengan durasi CSS transition
             }
         });
