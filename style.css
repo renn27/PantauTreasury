@@ -382,7 +382,7 @@ body {
 }
 
 /* ===== SAVE BUTTON STYLING ===== */
-#saveTradeBtn, #clearSimulationBtn {
+#saveTradeBtn, #clearSimulationBtn, #openManualGramModalBtn {
     border-radius: 30px;
     transition: var(--transition-default);
 }

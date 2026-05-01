@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
         'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
         'manualBuyPricePreview', 'manualSellPricePreview',
-        'manualGramAccordion', 'accordionToggleBtn', 'accordionContent', 'accordionChevron'
+        'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent'
     ];
 
     ids.forEach(id => {
@@ -494,41 +494,44 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.clearSimulationBtn.addEventListener('click', clearSimulation);
     }
 
-    // Setup accordion toggle
-    if (dom.accordionToggleBtn && dom.accordionContent && dom.accordionChevron) {
-        dom.accordionToggleBtn.addEventListener('click', () => {
-            const isHidden = dom.accordionContent.classList.contains('hidden');
+    // Setup modal toggle
+    const closeManualGramModal = () => {
+        if (dom.manualGramModal && dom.manualGramModalContent) {
+            dom.manualGramModal.classList.add('opacity-0');
+            dom.manualGramModalContent.classList.remove('scale-100');
+            dom.manualGramModalContent.classList.add('scale-95');
+            setTimeout(() => {
+                dom.manualGramModal.classList.add('hidden');
+            }, 300);
+        }
+    };
 
-            if (isHidden) {
-                // Open accordion
-                dom.accordionContent.classList.remove('hidden');
-                dom.accordionChevron.classList.add('rotated');
+    const openManualGramModal = () => {
+        if (dom.manualGramModal && dom.manualGramModalContent) {
+            dom.manualGramModal.classList.remove('hidden');
+            // Force reflow
+            void dom.manualGramModal.offsetWidth;
+            dom.manualGramModal.classList.remove('opacity-0');
+            dom.manualGramModalContent.classList.remove('scale-95');
+            dom.manualGramModalContent.classList.add('scale-100');
+            
+            // Focus on input when opened
+            setTimeout(() => {
+                if (dom.manualGramInput) dom.manualGramInput.focus();
+            }, 100);
+        }
+    };
 
-                // Force reflow to enable transition after removing display:none
-                void dom.accordionContent.offsetWidth;
+    if (dom.openManualGramModalBtn) {
+        dom.openManualGramModalBtn.addEventListener('click', openManualGramModal);
+    }
 
-                // Animasi smooth
-                dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
-                dom.accordionContent.style.opacity = '1';
-            } else {
-                // Close accordion
-                dom.accordionChevron.classList.remove('rotated');
-                
-                // Ensure current height is set before shrinking
-                dom.accordionContent.style.maxHeight = dom.accordionContent.scrollHeight + 'px';
-                void dom.accordionContent.offsetWidth; // Force reflow
-                
-                dom.accordionContent.style.maxHeight = '0px';
-                dom.accordionContent.style.opacity = '0';
-                
-                setTimeout(() => {
-                    // Only add hidden if it hasn't been reopened
-                    if (dom.accordionContent.style.opacity === '0') {
-                        dom.accordionContent.classList.add('hidden');
-                    }
-                }, 300); // Sama dengan durasi CSS transition
-            }
-        });
+    if (dom.closeManualGramModalBtn) {
+        dom.closeManualGramModalBtn.addEventListener('click', closeManualGramModal);
+    }
+
+    if (dom.manualGramModalBackdrop) {
+        dom.manualGramModalBackdrop.addEventListener('click', closeManualGramModal);
     }
 
     if (dom.markBuyBtn) {
@@ -575,11 +578,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     dom.applyManualBuyBtn?.addEventListener('click', () => {
-        applyManualGramSimulation('buy');
+        if (applyManualGramSimulation('buy')) closeManualGramModal();
     });
 
     dom.applyManualSellBtn?.addEventListener('click', () => {
-        applyManualGramSimulation('sell');
+        if (applyManualGramSimulation('sell')) closeManualGramModal();
     });
 
     updateManualPricePreview();
@@ -1043,12 +1046,12 @@ function updateManualPricePreview() {
 }
 
 function applyManualGramSimulation(mode) {
-    if (mode !== 'buy' && mode !== 'sell') return;
+    if (mode !== 'buy' && mode !== 'sell') return false;
 
     const gram = parsePositiveFloat(dom.manualGramInput?.value || '');
     if (!gram) {
         setManualGramError('Masukkan gram valid lebih dari 0');
-        return;
+        return false;
     }
 
     setManualGramError('');
@@ -1071,6 +1074,7 @@ function applyManualGramSimulation(mode) {
     state.simulation.gram = gram;
     saveSimulationToStorage();
     updateSimulation();
+    return true;
 }
 
 function updateSimulation() {
@@ -1091,9 +1095,9 @@ function updateSimulation() {
         dom.saveTradeBtn.classList.remove("hidden")
     }
 
-    // Tampilkan accordion manual gram jika ada simulasi aktif
-    if (dom.manualGramAccordion) {
-        dom.manualGramAccordion.classList.remove('hidden');
+    // Tampilkan tombol modal manual gram jika ada simulasi aktif
+    if (dom.openManualGramModalBtn) {
+        dom.openManualGramModalBtn.classList.remove('hidden');
     }
 
     const inactiveMode = mode === 'buy' ? 'sell' : 'buy';
@@ -1226,13 +1230,9 @@ function clearSimulation() {
     if (dom.markBuyBtn) dom.markBuyBtn.classList.remove('simulation-active');
     if (dom.markSellBtn) dom.markSellBtn.classList.remove('simulation-active');
 
-    // Sembunyikan accordion
-    if (dom.manualGramAccordion) {
-        dom.manualGramAccordion.classList.add('hidden');
-        if (dom.accordionContent) {
-            dom.accordionContent.classList.add('hidden');
-            dom.accordionChevron?.classList.remove('rotated');
-        }
+    // Sembunyikan tombol modal
+    if (dom.openManualGramModalBtn) {
+        dom.openManualGramModalBtn.classList.add('hidden');
     }
 
     const clearBtn = dom.clearSimulationBtn;
