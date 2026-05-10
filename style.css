@@ -3,7 +3,12 @@
     --glass-blur: 10px;
     --border-radius-card: 16px;
     --border-radius-element: 12px;
-    --transition-default: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+    --transition-default: background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        box-shadow 0.25s cubic-bezier(0.2, 0, 0, 1),
+        color 0.25s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.25s cubic-bezier(0.2, 0, 0, 1),
+        transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     --shadow-sm: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
     --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
     --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
@@ -32,6 +37,11 @@ body {
 .text-xxxs {
     font-size: 0.5rem;
     line-height: 0.75rem;
+}
+
+.transition-smooth {
+    transition-property: background-color, border-color, box-shadow, color, opacity, transform;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 .font-numeric {
@@ -347,20 +357,6 @@ body {
     }
 }
 
-/* ===== ACCORDION STYLING ===== */
-#accordionToggleBtn {
-    border-radius: 30px;
-    transition: var(--transition-default);
-}
-
-#accordionToggleBtn:hover {
-    background: rgba(243, 244, 246, 0.8);
-}
-
-.dark #accordionToggleBtn:hover {
-    background: rgba(51, 65, 85, 0.5);
-}
-
 #manualGramInput {
     border-radius: 40px;
     padding: 0.6rem 1rem;
@@ -399,9 +395,20 @@ body {
     white-space: nowrap;
 }
 
+.border-subtle {
+    border-color: rgba(229, 231, 235, 0.65);
+}
+
+.dark .border-subtle {
+    border-color: rgba(55, 65, 81, 0.75);
+}
+
 /* Progress bar styling */
 #countdownBar {
-    transition: width 1s linear;
+    width: 100%;
+    transform-origin: left center;
+    transition: transform 1s linear;
+    will-change: transform;
     background: linear-gradient(90deg, #3b82f6, #60a5fa);
     border-radius: 20px;
 }

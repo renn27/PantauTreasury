@@ -1,9 +1,7 @@
 /* ================= REQUEST HEADERS (AMAN UNTUK BROWSER) ================= */
 const REQUEST_HEADERS = {
     'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-ID,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,id;q=0.6',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache'
+    'Accept-Language': 'en-ID,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,id;q=0.6'
 };
 
 /* Pre-built Headers instance — tidak perlu dibuat ulang setiap fetch */
@@ -23,7 +21,7 @@ const DEBUG = false;
 const priceCache = {
     data: null,
     timestamp: 0,
-    isValid: () => Date.now() - priceCache.timestamp < 10000,
+    isValid: () => Date.now() - priceCache.timestamp < CACHE_LOCAL_TTL_MS,
     get: () => priceCache.isValid() ? priceCache.data : null,
     set: (data) => {
         const prev = priceCache.data;
@@ -104,6 +102,14 @@ let state = {
 
 /* ================= DOM CACHE ================= */
 const dom = {};
+const buttonFeedbackOriginalContent = new WeakMap();
+const buttonFeedbackTimers = new WeakMap();
+const BUTTON_FEEDBACK_CLASSES = [
+    'bg-green-600', 'dark:bg-green-700',
+    'bg-red-600', 'dark:bg-red-700',
+    'text-white', 'scale-105', 'shake',
+    'opacity-90', 'cursor-wait'
+];
 
 /* ================= FAST HELPER FUNCTIONS ================= */
 const formatRupiah = new Intl.NumberFormat('id-ID', {
@@ -172,8 +178,8 @@ function getSimulationStorageKey() {
 function updateCountdownDisplay() {
     if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
     if (dom.countdownBar) {
-        const width = Math.max(0, Math.min(100, (state.countdown / COUNTDOWN_SECONDS) * 100));
-        dom.countdownBar.style.width = `${width}%`;
+        const progress = Math.max(0, Math.min(1, state.countdown / COUNTDOWN_SECONDS));
+        dom.countdownBar.style.transform = `scaleX(${progress})`;
     }
 }
 
@@ -254,7 +260,17 @@ function triggerManualRefresh() {
 /* ================= SHARED: Button Feedback ================= */
 function showButtonFeedback(btn, type, duration) {
     if (!btn) return;
-    const originalContent = btn.innerHTML;
+    if (!buttonFeedbackOriginalContent.has(btn)) {
+        buttonFeedbackOriginalContent.set(btn, btn.innerHTML);
+    }
+
+    const previousTimer = buttonFeedbackTimers.get(btn);
+    if (previousTimer) {
+        clearTimeout(previousTimer);
+        buttonFeedbackTimers.delete(btn);
+    }
+
+    const originalContent = buttonFeedbackOriginalContent.get(btn);
 
     const icons = {
         success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />',
@@ -283,18 +299,21 @@ function showButtonFeedback(btn, type, duration) {
     `;
 
     const classes = colorClasses[type] || [];
+    btn.classList.remove(...BUTTON_FEEDBACK_CLASSES);
     btn.classList.add(...classes);
+    btn.disabled = type === 'loading';
 
     if (type === 'loading') {
-        btn.disabled = true;
         return; // Tidak auto-restore untuk loading
     }
 
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
         btn.innerHTML = originalContent;
         btn.disabled = false;
-        btn.classList.remove(...classes);
+        btn.classList.remove(...BUTTON_FEEDBACK_CLASSES);
+        buttonFeedbackTimers.delete(btn);
     }, duration || 1000);
+    buttonFeedbackTimers.set(btn, timeoutId);
 }
 
 /* ================= SHARED: Schedule Retry ================= */
@@ -453,6 +472,31 @@ function fixTradingViewTouch() {
     tvIframe.addEventListener('touchcancel', resetTouchState);
 }
 
+function updateThemeButtonText(isDark) {
+    if (dom.themeText) {
+        dom.themeText.textContent = isDark ? 'Light' : 'Dark';
+    }
+}
+
+function syncTradingViewTheme(isDark) {
+    const tvIframe = dom.tvIframe;
+    if (!tvIframe) return;
+
+    const nextTheme = isDark ? 'dark' : 'light';
+    const templateSrc = tvIframe.dataset?.src;
+    if (templateSrc) {
+        const nextSrc = templateSrc.replace('{theme}', nextTheme);
+        if (tvIframe.src !== nextSrc) {
+            tvIframe.src = nextSrc;
+        }
+        return;
+    }
+
+    if (tvIframe.src) {
+        tvIframe.src = tvIframe.src.replace(/theme=\w+/, `theme=${nextTheme}`);
+    }
+}
+
 /* ================= INIT DOM ================= */
 document.addEventListener('DOMContentLoaded', () => {
     debugLog('DOM Ready');
@@ -487,6 +531,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedWidth) {
         state.chartWidth = savedWidth;
         applyChartWidth(savedWidth);
+    }
+
+    const initialIsDark = document.documentElement.classList.contains('dark');
+    updateThemeButtonText(initialIsDark);
+    if (dom.tvIframe && !dom.tvIframe.getAttribute('src')) {
+        syncTradingViewTheme(initialIsDark);
     }
 
     // Bind events
@@ -650,15 +700,10 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('darkMode', isDark);
 
             // Update TradingView
-            const tvIframe = dom.tvIframe;
-            if (tvIframe) {
-                tvIframe.src = tvIframe.src.replace(/theme=\w+/, `theme=${isDark ? 'dark' : 'light'}`);
-            }
+            syncTradingViewTheme(isDark);
 
             // Update button text
-            if (dom.themeText) {
-                dom.themeText.textContent = isDark ? 'Light' : 'Dark';
-            }
+            updateThemeButtonText(isDark);
         });
     }
 
@@ -1409,7 +1454,9 @@ async function saveTradingToDatabase() {
 }
 
 /* ================= INITIAL SETUP ================= */
-if (localStorage.getItem('darkMode') === 'true' ||
-    (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.documentElement.classList.add('dark');
-}
+try {
+    if (localStorage.getItem('darkMode') === 'true' ||
+        (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+    }
+} catch (e) { }

@@ -15,6 +15,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <script>
+        (function () {
+            try {
+                var savedMode = localStorage.getItem('darkMode');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (savedMode === 'true' || (!savedMode && prefersDark)) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) { }
+        })();
+    </script>
+
     <!-- Preconnect + dns-prefetch fallback untuk resource eksternal -->
     <link rel="preconnect" href="https://api.treasury.id">
     <link rel="dns-prefetch" href="https://api.treasury.id">
@@ -86,7 +98,7 @@
                                                             class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                                                             <div id="countdownBar"
                                                                 class="h-full bg-blue-500 progress-bar rounded-full"
-                                                                style="width: 100%"></div>
+                                                                style="transform: scaleX(1)"></div>
                                                         </div>
                                                         <div class="flex justify-end mt-1">
                                                         </div>
@@ -95,7 +107,7 @@
 
                                                 <!-- Big Refresh Button - FULL TINGGI CARD dengan desain elegan -->
                                                 <button id="bigRefreshBtn"
-                                                    class="w-20 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 rounded-xl transition-all duration-300 group flex flex-col items-center justify-center shadow-md hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]">
+                                                    class="w-20 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 rounded-xl transition-smooth duration-300 group flex flex-col items-center justify-center shadow-md hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]">
                                                     <svg class="w-8 h-8 text-white group-hover:rotate-180 transition-transform duration-500 ease-out"
                                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -369,7 +381,7 @@
 
                                     <div class="grid grid-cols-2 gap-2">
                                         <button id="markBuyBtn"
-                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-800/30 dark:hover:to-emerald-800/30 text-green-700 dark:text-green-300 rounded-xl transition-all duration-200 card-hover group content-fit">
+                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-800/30 dark:hover:to-emerald-800/30 text-green-700 dark:text-green-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
                                             <div
                                                 class="w-8 h-8 flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor"
@@ -382,7 +394,7 @@
                                         </button>
 
                                         <button id="markSellBtn"
-                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border border-red-200 dark:border-red-700/50 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-800/30 dark:hover:to-rose-800/30 text-red-700 dark:text-red-300 rounded-xl transition-all duration-200 card-hover group content-fit">
+                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border border-red-200 dark:border-red-700/50 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-800/30 dark:hover:to-rose-800/30 text-red-700 dark:text-red-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
                                             <div
                                                 class="w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor"
@@ -444,7 +456,7 @@
 
                                         <div class="flex items-center gap-2">
                                             <button id="openManualGramModalBtn"
-                                                class="relative p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-all duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="relative p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Input Gram Manual" title="Input Gram Manual">
                                                 <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -454,7 +466,7 @@
                                             </button>
 
                                             <button id="clearSimulationBtn"
-                                                class="relative p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md transition-all duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="relative p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Hapus simulasi" title="Hapus simulasi">
                                                 <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -466,7 +478,7 @@
                                             </button>
 
                                             <button id="saveTradeBtn"
-                                                class="relative p-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-md transition-all duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="relative p-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Simpan transaksi" title="Simpan transaksi">
                                                 <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -552,9 +564,17 @@
                         <div
                             class="chart-container flex-1 min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
                             <iframe id="tvIframe" class="w-full h-full"
-                                src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme=light&style=1&timezone=Asia%2FJakarta&hide_side_toolbar=true&withdateranges=false&allow_symbol_change=false&locale=id"
+                                data-src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme={theme}&style=1&timezone=Asia%2FJakarta&hide_side_toolbar=true&withdateranges=false&allow_symbol_change=false&locale=id"
                                 title="XAU/USD Trading Chart" scrolling="no" frameborder="0" allowfullscreen>
                             </iframe>
+                            <script>
+                                (function () {
+                                    var iframe = document.getElementById('tvIframe');
+                                    if (!iframe) return;
+                                    var theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+                                    iframe.src = iframe.dataset.src.replace('{theme}', theme);
+                                })();
+                            </script>
                         </div>
                     </div>
                 </div>
@@ -568,7 +588,7 @@
                 <div class="status-indicator bg-green-500 mr-1.5"></div>
                 <span>Dashboard Emas</span>
                 <span class="mx-1.5">•</span>
-                <span>v26.05.01</span>
+                <span>v26.05.10</span>
             </div>
             <div class="flex items-center">
                 <span>Data: Treasury.id API</span>
@@ -635,11 +655,11 @@
                 <!-- Tombol Aksi -->
                 <div class="grid grid-cols-2 gap-3 pt-2">
                     <button id="applyManualBuyBtn" type="button"
-                        class="px-3 py-2.5 text-xs font-semibold rounded-lg border border-green-200 dark:border-green-700/50 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-800/30 transition-all duration-200 hover:shadow-sm active:scale-[0.98]">
+                        class="px-3 py-2.5 text-xs font-semibold rounded-lg border border-green-200 dark:border-green-700/50 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-800/30 transition-smooth duration-200 hover:shadow-sm active:scale-[0.98]">
                         Gunakan utk Beli
                     </button>
                     <button id="applyManualSellBtn" type="button"
-                        class="px-3 py-2.5 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/30 transition-all duration-200 hover:shadow-sm active:scale-[0.98]">
+                        class="px-3 py-2.5 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/30 transition-smooth duration-200 hover:shadow-sm active:scale-[0.98]">
                         Gunakan utk Jual
                     </button>
                 </div>
