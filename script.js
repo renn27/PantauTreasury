@@ -40,10 +40,14 @@ const priceCache = {
         }
 
         try {
-            localStorage.setItem('gold_cache', JSON.stringify({
-                data,
-                timestamp: Date.now()
-            }));
+            const payload = JSON.stringify({ data, timestamp: Date.now() });
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(() => {
+                    try { localStorage.setItem('gold_cache', payload); } catch (e) { }
+                });
+            } else {
+                localStorage.setItem('gold_cache', payload);
+            }
         } catch (e) { }
     }
 };
@@ -112,6 +116,7 @@ const BUTTON_FEEDBACK_CLASSES = [
     'text-white', 'scale-105', 'shake',
     'opacity-90', 'cursor-wait'
 ];
+let simStatusSlots = null;
 
 /* ================= FAST HELPER FUNCTIONS ================= */
 const formatRupiah = new Intl.NumberFormat('id-ID', {
@@ -124,6 +129,29 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
     second: '2-digit',
     hour12: false
 }).format;
+
+// Cache DOM elements instantly on script execution (since script is deferred, DOM is ready)
+const ids = [
+    'hargaBeli', 'hargaJual', 'spreadPersen',
+    'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
+    'countdown', 'countdownBar', 'simulationResults', 'noSimulation',
+    'simulationStatus', 'markBuyBtn', 'markSellBtn',
+    'refreshApiBtn', 'themeText', 'bigRefreshBtn',
+    'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
+    'leftPanel', 'rightPanel', 'clearSimulationBtn', 'saveTradeBtn', 'simulationTimestamp',
+    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
+    'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
+    'manualBuyPricePreview', 'manualSellPricePreview',
+    'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent'
+];
+ids.forEach(id => {
+    dom[id] = document.getElementById(id);
+});
+
+// Render cached data immediately
+renderCachedData();
+// Fetch fresh data immediately (starts network request parallel to DOM Ready parsing)
+fetchHarga();
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
@@ -188,10 +216,13 @@ function updateCountdownDisplay() {
 /* Unified color class setter — menggantikan setCuanColorClass & setProfitColorClass */
 function setProfitColorClass(el, isPositive) {
     if (!el) return;
-    el.classList.toggle('text-green-600', isPositive);
-    el.classList.toggle('dark:text-green-400', isPositive);
-    el.classList.toggle('text-red-600', !isPositive);
-    el.classList.toggle('dark:text-red-400', !isPositive);
+    const cl = el.classList;
+    cl.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400');
+    if (isPositive) {
+        cl.add('text-green-600', 'dark:text-green-400');
+    } else {
+        cl.add('text-red-600', 'dark:text-red-400');
+    }
 }
 
 function triggerPriceChangeAnimation() {
@@ -234,8 +265,7 @@ function computeDerivedValues(buy, sell) {
 function renderDerivedValues(values) {
     const { spread, spreadPercent, gramBeli, gramJual, nilaiJual, cuan } = values;
 
-    if (dom.spreadNominal) dom.spreadNominal.textContent = formatRupiah(spread);
-    if (dom.spreadPersen) dom.spreadPersen.textContent = `(${spreadPercent}%)`;
+    if (dom.spreadPersen) dom.spreadPersen.textContent = `${spreadPercent}%`;
     if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
     if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
     if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
@@ -503,28 +533,6 @@ function syncTradingViewTheme(isDark) {
 document.addEventListener('DOMContentLoaded', () => {
     debugLog('DOM Ready');
 
-    // Cache DOM elements
-    const ids = [
-        'hargaBeli', 'hargaJual', 'spreadNominal', 'spreadPersen',
-        'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
-        'countdown', 'countdownBar', 'simulationResults', 'noSimulation',
-        'simulationStatus', 'markBuyBtn', 'markSellBtn',
-        'refreshApiBtn', 'themeText', 'bigRefreshBtn',
-        'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
-        'leftPanel', 'rightPanel', 'clearSimulationBtn', 'saveTradeBtn', 'simulationTimestamp',
-        'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
-        'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
-        'manualBuyPricePreview', 'manualSellPricePreview',
-        'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent'
-    ];
-
-    ids.forEach(id => {
-        dom[id] = document.getElementById(id);
-    });
-
-    // Tampilkan data cache INSTANTLY
-    const hasCache = renderCachedData();
-
     // Load simulation from storage
     loadSimulationFromStorage();
 
@@ -731,14 +739,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start timers
     startTimers();
 
-    // Fetch data
-    setTimeout(() => {
-        if (!hasCache) {
-            fetchHarga();
+    // Pause/resume timer saat tab hidden/visible
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (state.timerTicker) {
+                clearInterval(state.timerTicker);
+                state.timerTicker = null;
+            }
         } else {
-            setTimeout(fetchHarga, 500);
+            if (!state.timerTicker) {
+                startTimers();
+            }
+            if (state.countdown <= 0 && !state.isFetching) {
+                fetchHarga();
+            }
         }
-    }, 100);
+    });
+
+
 
     // PERBAIKAN: Panggil fungsi touch handler setelah iframe siap
     setTimeout(fixTradingViewTouch, 500);
@@ -786,7 +804,7 @@ async function fetchHarga() {
     // TAMPILKAN STATUS FETCHING di UI
     if (dom.lastUpdate) {
         if (state.isRetrying) {
-            dom.lastUpdate.textContent = `Retrying... (${state.retryCount}/${state.MAX_RETRY})`;
+            dom.lastUpdate.textContent = `Retry (${state.retryCount}/${state.MAX_RETRY})`;
         } else {
             dom.lastUpdate.textContent = 'Fetching...';
         }
@@ -817,7 +835,6 @@ async function fetchHarga() {
             mode: 'cors',
             credentials: 'omit',
             cache: 'no-store',
-            keepalive: true,
             redirect: 'follow',
             referrerPolicy: 'no-referrer'
         });
@@ -1226,10 +1243,17 @@ function saveSimulationToStorage() {
             return;
         }
 
-        localStorage.setItem('gold_simulation', JSON.stringify({
+        const payload = JSON.stringify({
             simulation: state.simulation,
             timestamp: now
-        }));
+        });
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(() => {
+                try { localStorage.setItem('gold_simulation', payload); } catch (e) {}
+            });
+        } else {
+            localStorage.setItem('gold_simulation', payload);
+        }
         state.lastSimulationStorageKey = key;
         state.simulationStorageLastSavedAt = now;
         debugLog('Simulasi disimpan ke localStorage');
@@ -1326,42 +1350,80 @@ function clearSimulation() {
                 Klik tombol untuk memulai simulasi
             </p>`;
     }
+    simStatusSlots = null;
 
     debugLog('Simulasi dihapus');
 }
 
 /* ================= FUNGSI BARU: UPDATE STATUS SIMULASI ================= */
-function updateSimulationStatus(mode) {
-    const price = mode === 'buy' ? state.simulation.buyPrice : state.simulation.sellPrice;
-    const priceLabel = mode === 'buy' ? 'Harga Beli' : 'Harga Jual';
-    const priceColor = mode === 'buy' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-    const modeIconColor = mode === 'buy' ? 'text-green-500' : 'text-red-500';
-    const modeIconPath = mode === 'buy'
-        ? 'M7 17L17 7M8 7h9v9'
-        : 'M7 7l10 10m0-9v9H8';
-    const modeText = mode === 'buy' ? 'Simulasi Beli' : 'Simulasi Jual';
-    const modeTextColor = mode === 'buy' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+const SIM_STATUS_COLOR_CLASSES = ['text-green-500', 'text-red-500', 'text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400'];
 
-    const timestampEl = dom.simulationTimestamp;
-    if (timestampEl) {
-        const now = new Date();
-        timestampEl.textContent = `Update terakhir : ${formatTimeIdHms(now)}`;
+function ensureSimStatusTemplate() {
+    if (simStatusSlots && simStatusSlots.root && simStatusSlots.root.isConnected) {
+        return simStatusSlots;
     }
 
     dom.simulationStatus.innerHTML = `
     <div class="simulation-status-summary text-left">
         <div class="simulation-status-mode flex items-center">
-            <svg class="ui-icon w-4 h-4 ${modeIconColor} animate-pulse mr-2 flex-shrink-0"
+            <svg class="ui-icon w-4 h-4 animate-pulse mr-2 flex-shrink-0" data-slot="modeIcon"
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="${modeIconPath}"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d=""></path>
             </svg>
-            <p class="text-base font-semibold ${modeTextColor}">${modeText}</p>
+            <p class="text-base font-semibold" data-slot="modeText"></p>
         </div>
         <div class="simulation-status-value text-right">
-            <p class="text-xxs text-gray-500 dark:text-gray-400">${priceLabel}</p>
-            <p class="simulation-status-price font-bold ${priceColor} font-numeric">${formatRupiah(price)}</p>
+            <p class="text-xxs text-gray-500 dark:text-gray-400" data-slot="priceLabel"></p>
+            <p class="simulation-status-price font-bold font-numeric" data-slot="priceValue"></p>
         </div>
     </div>`;
+
+    const root = dom.simulationStatus.firstElementChild;
+    simStatusSlots = {
+        root: root,
+        modeIcon: root.querySelector('[data-slot="modeIcon"]'),
+        modeIconPath: root.querySelector('[data-slot="modeIcon"] path'),
+        modeText: root.querySelector('[data-slot="modeText"]'),
+        priceLabel: root.querySelector('[data-slot="priceLabel"]'),
+        priceValue: root.querySelector('[data-slot="priceValue"]')
+    };
+    return simStatusSlots;
+}
+
+function updateSimulationStatus(mode) {
+    const slots = ensureSimStatusTemplate();
+    if (!slots) return;
+
+    const isBuy = mode === 'buy';
+    const price = isBuy ? state.simulation.buyPrice : state.simulation.sellPrice;
+
+    const timestampEl = dom.simulationTimestamp;
+    if (timestampEl) {
+        timestampEl.textContent = `Update terakhir : ${formatTimeIdHms(new Date())}`;
+    }
+
+    // Update icon color
+    const icon = slots.modeIcon;
+    icon.classList.remove(...SIM_STATUS_COLOR_CLASSES);
+    icon.classList.add(isBuy ? 'text-green-500' : 'text-red-500');
+
+    // Update icon path
+    slots.modeIconPath.setAttribute('d', isBuy ? 'M7 17L17 7M8 7h9v9' : 'M7 7l10 10m0-9v9H8');
+
+    // Update mode text
+    const modeTextEl = slots.modeText;
+    modeTextEl.textContent = isBuy ? 'Simulasi Beli' : 'Simulasi Jual';
+    modeTextEl.classList.remove(...SIM_STATUS_COLOR_CLASSES);
+    modeTextEl.classList.add(...(isBuy ? ['text-green-600', 'dark:text-green-400'] : ['text-red-600', 'dark:text-red-400']));
+
+    // Update price label
+    slots.priceLabel.textContent = isBuy ? 'Harga Beli' : 'Harga Jual';
+
+    // Update price value
+    const priceEl = slots.priceValue;
+    priceEl.textContent = formatRupiah(price);
+    priceEl.classList.remove(...SIM_STATUS_COLOR_CLASSES);
+    priceEl.classList.add(...(isBuy ? ['text-green-600', 'dark:text-green-400'] : ['text-red-600', 'dark:text-red-400']));
 }
 
 /* ================= TIMERS ================= */
@@ -1394,8 +1456,7 @@ function tickTimers() {
         }
     }
 
-    const now = new Date();
-    if (now.getSeconds() === 1 && !state.isFetching) {
+    if (!state.isFetching && new Date().getSeconds() === 1) {
         debugLog('Auto-fetch detik 1');
 
         state.isAutoFetching = true;

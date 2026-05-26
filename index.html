@@ -13,7 +13,8 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
 
     <script>
         (function () {
@@ -32,6 +33,7 @@
     <link rel="dns-prefetch" href="https://api.treasury.id">
     <link rel="preconnect" href="https://s.tradingview.com">
     <link rel="dns-prefetch" href="https://s.tradingview.com">
+    <link rel="preconnect" href="https://time.is">
     <link rel="dns-prefetch" href="https://time.is">
     <link rel="dns-prefetch" href="https://script.google.com">
 </head>
@@ -49,9 +51,10 @@
                         <!-- TIME.IS iframe -->
                         <div class="header-time-col">
                             <div class="glass-card rounded-lg overflow-hidden relative h-full card-hover card-elevated">
-                                <iframe id="timeIframe" src="https://time.is/Jakarta"
+                                <iframe id="timeIframe"
+                                    src="https://time.is/Jakarta"
                                     class="absolute top-[-180%] left-1/2 w-[145%] h-[190%] -translate-x-1/2 translate-y-[50%]"
-                                    title="Waktu Jakarta" loading="lazy" fetchpriority="low"></iframe>
+                                    title="Waktu Jakarta"></iframe>
                             </div>
                         </div>
 
@@ -84,7 +87,7 @@
                                                     <!-- Time & Countdown -->
                                                     <div class="update-info-values flex items-center justify-between">
                                                         <p id="lastUpdate"
-                                                            class="update-info-time font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight">
+                                                            class="update-info-time font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight truncate">
                                                             -
                                                         </p>
                                                         <span id="countdown"
@@ -245,13 +248,9 @@
                                         Spread
                                     </p>
                                 </div>
-                                <div class="flex items-center space-x-1">
-                                    <p id="spreadNominal"
-                                        class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
-                                        -
-                                    </p>
+                                <div class="flex items-center">
                                     <p id="spreadPersen"
-                                        class="text-xs font-medium text-red-500 dark:text-red-400 text-ellipsis">
+                                        class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
                                         -
                                     </p>
                                 </div>
@@ -371,7 +370,7 @@
                                             class="simulation-trade-btn flex flex-col items-center justify-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-800/30 dark:hover:to-emerald-800/30 text-green-700 dark:text-green-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
                                             <span class="simulation-trade-content">
                                                 <span
-                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
+                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-lg mb-2">
                                                     <svg class="ui-icon w-4 h-4" fill="none" stroke="currentColor"
                                                         viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -386,7 +385,7 @@
                                             class="simulation-trade-btn flex flex-col items-center justify-center p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border border-red-200 dark:border-red-700/50 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-800/30 dark:hover:to-rose-800/30 text-red-700 dark:text-red-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
                                             <span class="simulation-trade-content">
                                                 <span
-                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
+                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-lg mb-2">
                                                     <svg class="ui-icon w-4 h-4" fill="none" stroke="currentColor"
                                                         viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
