@@ -14,6 +14,8 @@ const SIMULATION_TTL_MS = 86400000; // 24 jam
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
 const SIMULATION_BUY_BASE = 60000000;
 const SIMULATION_SELL_BASE = 58005000;
+const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
+const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
 const DEBUG = false;
 
@@ -273,9 +275,9 @@ function showButtonFeedback(btn, type, duration) {
     const originalContent = buttonFeedbackOriginalContent.get(btn);
 
     const icons = {
-        success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />',
-        error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />',
-        loading: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />'
+        success: '<path stroke-linecap="round" stroke-linejoin="round" d="M5 12l4.5 4.5L19 7" />',
+        error: '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />',
+        loading: '<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 00-14.8-4L4 9m0 0V4m0 5h5M4 13a8 8 0 0014.8 4L20 15m0 0v5m0-5h-5" />'
     };
 
     const labels = { success: 'Tersimpan', error: 'Gagal', loading: 'Menyimpan' };
@@ -291,7 +293,7 @@ function showButtonFeedback(btn, type, duration) {
 
     btn.innerHTML = `
         <span class="flex items-center gap-1 px-1">
-            <svg class="w-4 h-4${spinClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="ui-icon w-4 h-4${spinClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 ${icons[type]}
             </svg>
             ${labelHtml}
@@ -981,22 +983,22 @@ function buildSimulationTemplate(mode) {
     const baseLabel = isBuy ? 'Gram Beli (60jt)' : 'Gram Jual (58.005jt)';
 
     return `
-        <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gradient-to-br from-${gradientFrom}-50 to-${gradientTo}-50 dark:from-${gradientFrom}-900/20 dark:to-${gradientTo}-900/20 p-2.5 rounded-lg">
+        <div class="simulation-result-row grid grid-cols-2 gap-2">
+            <div class="simulation-result-tile bg-gradient-to-br from-${gradientFrom}-50 to-${gradientTo}-50 dark:from-${gradientFrom}-900/20 dark:to-${gradientTo}-900/20 p-2.5 rounded-lg">
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">${baseLabel}</p>
                 <p data-slot="markedGram" class="text-base font-bold ${colorClass} font-numeric">-</p>
             </div>
-            <div class="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
+            <div class="simulation-result-tile bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-2.5 rounded-lg">
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Gram Sekarang</p>
                 <p data-slot="currentGram" class="text-base font-bold text-gray-900 dark:text-gray-100 font-numeric">-</p>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-2.5 rounded-lg">
+        <div class="simulation-result-row grid grid-cols-2 gap-2">
+            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg" data-metric="gramDiff">
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Selisih Gram</p>
                 <p data-slot="gramDiff" class="text-base font-bold font-numeric">-</p>
             </div>
-            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-2.5 rounded-lg">
+            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg" data-metric="profitLoss">
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Profit / Loss</p>
                 <p data-slot="profitLoss" class="text-lg font-bold font-numeric">-</p>
             </div>
@@ -1035,10 +1037,29 @@ function getSimulationSlotRefs(mode, node) {
         markedGramEl: node.querySelector('[data-slot="markedGram"]'),
         currentGramEl: node.querySelector('[data-slot="currentGram"]'),
         gramDiffEl: node.querySelector('[data-slot="gramDiff"]'),
-        profitLossEl: node.querySelector('[data-slot="profitLoss"]')
+        profitLossEl: node.querySelector('[data-slot="profitLoss"]'),
+        gramDiffTile: node.querySelector('[data-metric="gramDiff"]'),
+        profitLossTile: node.querySelector('[data-metric="profitLoss"]')
     };
     state.simulationSlots[mode] = slots;
     return slots;
+}
+
+function setSimulationMetricTone(tile, valueEl, value, successThreshold) {
+    const isNegative = value < 0;
+    const isSuccess = value > successThreshold;
+    const tone = isNegative ? 'negative' : (isSuccess ? 'success' : 'neutral');
+
+    if (tile) {
+        tile.classList.remove(
+            'simulation-result-tone-negative',
+            'simulation-result-tone-neutral',
+            'simulation-result-tone-success'
+        );
+        tile.classList.add(`simulation-result-tone-${tone}`);
+    }
+
+    setProfitColorClass(valueEl, !isNegative);
 }
 
 function updateSimulationCardValues(mode, node, markedGram, currentGram, gramDiff, profitLoss) {
@@ -1055,9 +1076,18 @@ function updateSimulationCardValues(mode, node, markedGram, currentGram, gramDif
     if (gramDiffEl) gramDiffEl.textContent = `${gramDiff >= 0 ? '+' : ''}${gramDiff.toFixed(4)} g`;
     if (profitLossEl) profitLossEl.textContent = formatRupiah(profitLoss);
 
-    const isPositive = profitLoss >= 0;
-    setProfitColorClass(gramDiffEl, isPositive);
-    setProfitColorClass(profitLossEl, isPositive);
+    setSimulationMetricTone(
+        slots.gramDiffTile,
+        gramDiffEl,
+        gramDiff,
+        SIMULATION_GRAM_SUCCESS_THRESHOLD
+    );
+    setSimulationMetricTone(
+        slots.profitLossTile,
+        profitLossEl,
+        profitLoss,
+        SIMULATION_PROFIT_SUCCESS_THRESHOLD
+    );
 }
 
 function setManualGramError(message = '') {
@@ -1165,7 +1195,7 @@ function updateSimulation() {
         updateSimulationCardValues('buy', node, markedGram, currentGram, gramDiff, profitLoss);
 
         if (dom.simulationStatus) {
-            updateSimulationStatus(markedGram, profitLoss, 'buy');
+            updateSimulationStatus('buy');
         }
 
     } else if (mode === 'sell' && state.simulation.sellPrice) {
@@ -1180,7 +1210,7 @@ function updateSimulation() {
         updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
 
         if (dom.simulationStatus) {
-            updateSimulationStatus(markedGram, profitLoss, 'sell');
+            updateSimulationStatus('sell');
         }
     }
 }
@@ -1301,15 +1331,14 @@ function clearSimulation() {
 }
 
 /* ================= FUNGSI BARU: UPDATE STATUS SIMULASI ================= */
-function updateSimulationStatus(markedGram, profitLoss, mode) {
-    const profitClassStatus = profitLoss >= 0
-        ? 'text-green-700 dark:text-green-400'
-        : 'text-red-700 dark:text-red-400';
-
+function updateSimulationStatus(mode) {
     const price = mode === 'buy' ? state.simulation.buyPrice : state.simulation.sellPrice;
     const priceLabel = mode === 'buy' ? 'Harga Beli' : 'Harga Jual';
     const priceColor = mode === 'buy' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-    const modeColor = mode === 'buy' ? 'bg-green-500' : 'bg-red-500';
+    const modeIconColor = mode === 'buy' ? 'text-green-500' : 'text-red-500';
+    const modeIconPath = mode === 'buy'
+        ? 'M7 17L17 7M8 7h9v9'
+        : 'M7 7l10 10m0-9v9H8';
     const modeText = mode === 'buy' ? 'Simulasi Beli' : 'Simulasi Jual';
     const modeTextColor = mode === 'buy' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
@@ -1320,29 +1349,17 @@ function updateSimulationStatus(markedGram, profitLoss, mode) {
     }
 
     dom.simulationStatus.innerHTML = `
-    <div class="text-left space-y-3">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center">
-                <div class="status-indicator ${modeColor} animate-pulse mr-2"></div>
-                <div>
-                    <p class="text-md font-semibold ${modeTextColor}">${modeText}</p>
-                </div>
-            </div>
-            <div class="text-right">
-                <p class="text-sm font-bold ${profitClassStatus} font-numeric">${formatRupiah(profitLoss)}</p>
-                <p class="text-xxs font-medium ${profitClassStatus}">${profitLoss >= 0 ? 'PROFIT' : 'RUGI'}</p>
-            </div>
+    <div class="simulation-status-summary text-left">
+        <div class="simulation-status-mode flex items-center">
+            <svg class="ui-icon w-4 h-4 ${modeIconColor} animate-pulse mr-2 flex-shrink-0"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="${modeIconPath}"></path>
+            </svg>
+            <p class="text-base font-semibold ${modeTextColor}">${modeText}</p>
         </div>
-        
-        <div class="grid grid-cols-2 gap-3">
-            <div class="bg-white/50 dark:bg-gray-800/50 p-2 rounded-lg">
-                <p class="text-xxs text-gray-500 dark:text-gray-400 mb-1">${priceLabel}</p>
-                <p class="text-sm font-bold ${priceColor} font-numeric">${formatRupiah(price)}</p>
-            </div>
-            <div class="bg-white/50 dark:bg-gray-800/50 p-2 rounded-lg">
-                <p class="text-xxs text-gray-500 dark:text-gray-400 mb-1">Gram</p>
-                <p class="text-sm font-bold text-blue-600 dark:text-blue-400 font-numeric">${markedGram.toFixed(4)} g</p>
-            </div>
+        <div class="simulation-status-value text-right">
+            <p class="text-xxs text-gray-500 dark:text-gray-400">${priceLabel}</p>
+            <p class="simulation-status-price font-bold ${priceColor} font-numeric">${formatRupiah(price)}</p>
         </div>
     </div>`;
 }

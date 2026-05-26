@@ -40,14 +40,14 @@
     <div class="max-w-screen-2xl mx-auto p-2">
         <!-- Main Dashboard Container -->
         <div
-            class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden animate-fade-in">
+            class="dashboard-shell bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden animate-fade-in">
             <div id="dashboardGrid" class="grid grid-cols-4 min-h-[95vh]">
                 <!-- LEFT PANEL - 3/4 width -->
                 <div id="leftPanel" class="dashboard-main-panel col-span-3 flex flex-col">
                     <!-- ROW 1: Header Time & Controls -->
-                    <div class="dashboard-header-row grid grid-cols-3 h-24 row-divider">
+                    <div class="dashboard-header-row grid grid-cols-3 h-24 gap-2">
                         <!-- TIME.IS iframe -->
-                        <div class="header-time-col border-r border-subtle p-1 content-fit">
+                        <div class="header-time-col">
                             <div class="glass-card rounded-lg overflow-hidden relative h-full card-hover card-elevated">
                                 <iframe id="timeIframe" src="https://time.is/Jakarta"
                                     class="absolute top-[-180%] left-1/2 w-[145%] h-[190%] -translate-x-1/2 translate-y-[50%]"
@@ -56,44 +56,45 @@
                         </div>
 
                         <!-- Controls & Update Info -->
-                        <div class="header-controls-col col-span-2 border-r border-subtle p-2 content-fit">
+                        <div class="header-controls-col col-span-2">
                             <div class="h-full flex items-center">
-                                <div class="header-controls-grid w-full grid grid-cols-3 gap-1.5 items-center">
+                                <div class="header-controls-grid w-full h-full grid grid-cols-3 gap-2 items-stretch">
                                     <!-- Update Info Panel -->
-                                    <div class="col-span-2">
+                                    <div class="col-span-2 h-full">
                                         <div
-                                            class="glass-card rounded-lg p-2 border border-subtle card-elevated h-20 max-h-[18vh] grid-tight">
+                                            class="update-info-card glass-card rounded-lg p-2 card-elevated h-full grid-tight">
                                             <!-- Container flex dengan tinggi penuh -->
-                                            <div class="flex h-full gap-3">
+                                            <div class="update-info-layout flex h-full">
                                                 <!-- Bagian Kiri: Update Terakhir, Waktu, Countdown, Progress Bar -->
                                                 <div class="flex-1 flex flex-col">
                                                     <!-- Header -->
-                                                    <div class="flex items-center mb-1">
-                                                        <div class="flex items-center space-x-1">
-                                                            <div
-                                                                class="status-indicator bg-blue-500 animate-pulse-subtle">
-                                                            </div>
-                                                            <p
-                                                                class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                                                Update Terakhir
-                                                            </p>
-                                                        </div>
+                                                    <div class="update-info-heading">
+                                                        <span class="update-info-icon">
+                                                            <svg class="ui-icon w-3.5 h-3.5 text-blue-500 animate-pulse-subtle flex-shrink-0"
+                                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                                    d="M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                            </svg>
+                                                        </span>
+                                                        <p class="update-info-label text-xs font-medium">
+                                                            Update Terakhir
+                                                        </p>
                                                     </div>
 
                                                     <!-- Time & Countdown -->
-                                                    <div class="flex items-center justify-between mb-1">
+                                                    <div class="update-info-values flex items-center justify-between">
                                                         <p id="lastUpdate"
-                                                            class="text-2xl font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight">
+                                                            class="update-info-time font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight">
                                                             -
                                                         </p>
                                                         <span id="countdown"
-                                                            class="text-lg font-semibold text-blue-600 dark:text-blue-400 font-numeric bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md">
+                                                            class="update-info-countdown font-semibold text-blue-600 dark:text-blue-400 font-numeric bg-blue-50 dark:bg-blue-900/20 rounded-md">
                                                             60s
                                                         </span>
                                                     </div>
 
                                                     <!-- Progress Bar -->
-                                                    <div class="mt-auto">
+                                                    <div class="update-info-progress">
                                                         <div
                                                             class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                                                             <div id="countdownBar"
@@ -107,12 +108,11 @@
 
                                                 <!-- Big Refresh Button - FULL TINGGI CARD dengan desain elegan -->
                                                 <button id="bigRefreshBtn"
-                                                    class="w-20 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 rounded-xl transition-smooth duration-300 group flex flex-col items-center justify-center shadow-md hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]">
-                                                    <svg class="w-8 h-8 text-white group-hover:rotate-180 transition-transform duration-500 ease-out"
+                                                    class="update-info-refresh bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 rounded-xl transition-smooth duration-300 group flex flex-col items-center justify-center shadow-md hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]">
+                                                    <svg class="ui-icon w-8 h-8 text-white group-hover:scale-105 transition-transform duration-200 ease-out"
                                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2"
-                                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                                            d="M20 11a8 8 0 00-14.8-4L4 9m0 0V4m0 5h5M4 13a8 8 0 0014.8 4L20 15m0 0v5m0-5h-5">
                                                         </path>
                                                     </svg>
                                                 </button>
@@ -121,31 +121,14 @@
                                     </div>
 
                                     <!-- Control Panel -->
-                                    <div class="space-y-1 content-fit">
-                                        <div class="content-fit">
-                                            <h3
-                                                class="text-xs font-semibold text-gray-800 dark:text-gray-200 flex items-center text-ellipsis">
-                                                <svg class="w-3 h-3 mr-1.5 text-gray-500 flex-shrink-0" fill="none"
-                                                    stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                                                    </path>
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                </svg>
-                                                Kontrol
-                                            </h3>
-                                        </div>
-
-                                        <div class="grid grid-cols-2 gap-1.5">
+                                    <div class="header-action-panel content-fit">
+                                        <div class="header-action-grid grid grid-cols-2 gap-1.5">
                                             <button id="refreshApiBtn"
                                                 class="compact-btn flex items-center justify-center gap-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-300 font-medium group content-fit transition-smooth">
-                                                <svg class="w-3 h-3 group-hover:rotate-180 transition-transform duration-500 flex-shrink-0"
+                                                <svg class="ui-icon w-3 h-3 group-hover:scale-110 transition-transform duration-200 flex-shrink-0"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                                        d="M20 11a8 8 0 00-14.8-4L4 9m0 0V4m0 5h5M4 13a8 8 0 0014.8 4L20 15m0 0v5m0-5h-5">
                                                     </path>
                                                 </svg>
                                                 <span class="text-ellipsis">Data</span>
@@ -153,20 +136,19 @@
 
                                             <button id="refreshIframeBtn"
                                                 class="compact-btn flex items-center justify-center gap-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-300 font-medium group content-fit transition-smooth">
-                                                <svg class="w-3 h-3 group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
+                                                <svg class="ui-icon w-3 h-3 group-hover:scale-110 transition-transform duration-200 flex-shrink-0"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                                        d="M4 5h16v12H4zM8 21h8M12 17v4"></path>
                                                 </svg>
                                                 <span class="text-ellipsis">Widget</span>
                                             </button>
 
                                             <button id="darkModeBtn"
                                                 class="compact-btn flex items-center justify-center gap-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-300 font-medium group content-fit transition-smooth">
-                                                <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor"
+                                                <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
                                                         d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
                                                     </path>
                                                 </svg>
@@ -175,11 +157,10 @@
 
                                             <button id="fullscreenBtn"
                                                 class="compact-btn flex items-center justify-center gap-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-300 font-medium group content-fit transition-smooth">
-                                                <svg class="w-3 h-3 group-hover:scale-110 transition-transform duration-300 flex-shrink-0"
+                                                <svg class="ui-icon w-3 h-3 group-hover:scale-110 transition-transform duration-200 flex-shrink-0"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5">
+                                                        d="M9 4H4v5M15 4h5v5M9 20H4v-5m11 5h5v-5">
                                                     </path>
                                                 </svg>
                                                 <span class="text-ellipsis">Full</span>
@@ -192,17 +173,17 @@
                     </div>
 
                     <!-- ROW 2: Harga Beli & Harga Jual -->
-                    <div class="price-row grid grid-cols-2 h-28">
+                    <div class="price-row grid grid-cols-2 h-28 gap-2">
                         <!-- Harga Beli Card -->
-                        <div class=" border-subtle p-1 content-fit">
+                        <div class="price-card-shell">
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle h-full flex flex-col justify-between card-hover card-elevated">
+                                class="glass-card rounded-lg p-3 h-full flex flex-col justify-between card-hover card-elevated">
                                 <div class="text-center mb-2">
                                     <div class="flex items-center justify-center mb-1">
-                                        <svg class="w-4 h-4 text-green-500 dark:text-green-400 mr-1.5 flex-shrink-0"
+                                        <svg class="ui-icon w-4 h-4 text-green-500 dark:text-green-400 mr-1.5 flex-shrink-0"
                                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M5 16l6-6 4 4 4-6m0 0h-5m5 0v5"></path>
                                         </svg>
                                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                             Harga Beli
@@ -217,22 +198,19 @@
                                     </p>
                                 </div>
 
-                                <p class="text-xxs text-gray-500 dark:text-gray-400 text-center mt-2 text-ellipsis">
-                                    Harga terendah untuk pembelian
-                                </p>
                             </div>
                         </div>
 
                         <!-- Harga Jual Card -->
-                        <div class="p-1 content-fit">
+                        <div class="price-card-shell">
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle h-full flex flex-col justify-between card-hover card-elevated">
+                                class="glass-card rounded-lg p-3 h-full flex flex-col justify-between card-hover card-elevated">
                                 <div class="text-center mb-2">
                                     <div class="flex items-center justify-center mb-1">
-                                        <svg class="w-4 h-4 text-red-500 dark:text-red-400 mr-1.5 flex-shrink-0"
+                                        <svg class="ui-icon w-4 h-4 text-red-500 dark:text-red-400 mr-1.5 flex-shrink-0"
                                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M16 17l-4 4m0 0l-4-4m4 4V3"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M5 8l6 6 4-4 4 6m0 0h-5m5 0v-5"></path>
                                         </svg>
                                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                             Harga Jual
@@ -247,23 +225,22 @@
                                     </p>
                                 </div>
 
-                                <p class="text-xxs text-gray-500 dark:text-gray-400 text-center mt-2 text-ellipsis">
-                                    Harga tertinggi untuk penjualan
-                                </p>
                             </div>
                         </div>
                     </div>
 
                     <!-- ROW 3: Spread + Cuan -->
-                    <div class="stats-row p-2 min-h-0 row-divider">
-                        <div class="stats-grid grid grid-cols-5 gap-1.5 content-fit">
+                    <div class="stats-row min-h-0">
+                        <div class="stats-grid grid grid-cols-5 gap-2">
                             <!-- Spread Info -->
                             <div
-                                class="stats-spread-card glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-card stats-spread-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
-                                    <div
-                                        class="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 mr-1.5 flex-shrink-0">
-                                    </div>
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"></path>
+                                    </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                         Spread
                                     </p>
@@ -282,11 +259,13 @@
 
                             <!-- Gram Beli 60jt -->
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
-                                    <div
-                                        class="w-2 h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 mr-1.5 flex-shrink-0">
-                                    </div>
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M7 17L17 7M8 7h9v9"></path>
+                                    </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                         Gram Beli 60jt
                                     </p>
@@ -299,11 +278,13 @@
 
                             <!-- Gram Jual 58.005jt -->
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
-                                    <div
-                                        class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 mr-1.5 flex-shrink-0">
-                                    </div>
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M7 7l10 10m0-9v9H8"></path>
+                                    </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                         Gram Jual 58.005jt
                                     </p>
@@ -316,11 +297,13 @@
 
                             <!-- Estimasi nilai jual -->
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
-                                    <div
-                                        class="w-2 h-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 mr-1.5 flex-shrink-0">
-                                    </div>
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 6v12m3-9.5c-.7-.35-1.65-.5-3-.5-1.66 0-3 1-3 2.25s1.34 2 3 2 3 .75 3 2S13.66 16.5 12 16.5c-1.35 0-2.3-.15-3-.5"></path>
+                                    </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                         Estimasi Jual
                                     </p>
@@ -333,11 +316,13 @@
 
                             <!-- Cuan -->
                             <div
-                                class="glass-card rounded-lg p-3 border border-subtle card-hover card-elevated content-fit">
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
-                                    <div
-                                        class="w-2 h-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 mr-1.5 flex-shrink-0">
-                                    </div>
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M4 16l5-5 4 4 7-8m0 0h-5m5 0v5"></path>
+                                    </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                         Profit / Rugi
                                     </p>
@@ -348,32 +333,34 @@
                     </div>
 
                     <!-- ROW 4: Area Simulasi -->
-                    <div class="simulation-row p-2 min-h-0 flex-1">
-                        <div class="text-center mb-2">
+                    <div class="simulation-row min-h-0 flex-1">
+                        <div class="simulation-heading-wrap text-center">
                             <div
-                                class="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 mb-1.5">
-                                <svg class="w-3 h-3 text-blue-600 dark:text-blue-400 mr-1.5" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                                </svg>
+                                class="simulation-heading-pill inline-flex items-center rounded-full">
+                                <span class="simulation-heading-icon">
+                                    <svg class="ui-icon w-3 h-3 text-blue-600 dark:text-blue-400" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M4 15l5-5 4 4 7-8m0 0h-5m5 0v5"></path>
+                                    </svg>
+                                </span>
                                 <h3 class="text-xs font-semibold text-gray-800 dark:text-gray-200 text-ellipsis">
                                     Simulasi Trading Real-time
                                 </h3>
                             </div>
                         </div>
 
-                        <div class="simulation-main-grid grid grid-cols-2 gap-2">
+                        <div class="simulation-main-grid grid grid-cols-2 gap-2 items-stretch">
                             <!-- Panel Kiri: Kontrol Simulasi -->
                             <div class="flex flex-col">
                                 <div
-                                    class="glass-card rounded-xl p-3 border border-subtle h-full flex flex-col card-elevated">
+                                    class="simulation-panel glass-card rounded-xl p-3 h-full flex flex-col card-elevated">
                                     <p
-                                        class="text-xs font-semibold text-gray-800 dark:text-gray-300 mb-3 flex items-center">
-                                        <svg class="w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none" stroke="currentColor"
+                                        class="simulation-position-title text-xs font-semibold text-gray-800 dark:text-gray-300 mb-3 flex items-center">
+                                        <svg class="ui-icon w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M5 21V4m0 1h11l-2.5 4L16 13H5">
                                             </path>
                                         </svg>
                                         Tandai Posisi Trading
@@ -381,55 +368,58 @@
 
                                     <div class="grid grid-cols-2 gap-2">
                                         <button id="markBuyBtn"
-                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-800/30 dark:hover:to-emerald-800/30 text-green-700 dark:text-green-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
-                                            <div
-                                                class="w-8 h-8 flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                                                </svg>
-                                            </div>
-                                            <span class="text-xs font-semibold text-ellipsis">Tandai Beli</span>
+                                            class="simulation-trade-btn flex flex-col items-center justify-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700/50 hover:from-green-100 hover:to-emerald-100 dark:hover:from-green-800/30 dark:hover:to-emerald-800/30 text-green-700 dark:text-green-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
+                                            <span class="simulation-trade-content">
+                                                <span
+                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-green-100 dark:bg-green-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
+                                                    <svg class="ui-icon w-4 h-4" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            d="M7 17L17 7M8 7h9v9"></path>
+                                                    </svg>
+                                                </span>
+                                                <span class="simulation-trade-label font-semibold text-ellipsis">Beli</span>
+                                            </span>
                                         </button>
 
                                         <button id="markSellBtn"
-                                            class="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border border-red-200 dark:border-red-700/50 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-800/30 dark:hover:to-rose-800/30 text-red-700 dark:text-red-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
-                                            <div
-                                                class="w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M16 17l-4 4m0 0l-4-4m4 4V3"></path>
-                                                </svg>
-                                            </div>
-                                            <span class="text-xs font-semibold text-ellipsis">Tandai Jual</span>
+                                            class="simulation-trade-btn flex flex-col items-center justify-center p-3 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 border border-red-200 dark:border-red-700/50 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-800/30 dark:hover:to-rose-800/30 text-red-700 dark:text-red-300 rounded-xl transition-smooth duration-200 card-hover group content-fit">
+                                            <span class="simulation-trade-content">
+                                                <span
+                                                    class="simulation-trade-icon w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-900/30 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-200">
+                                                    <svg class="ui-icon w-4 h-4" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            d="M7 7l10 10m0-9v9H8"></path>
+                                                    </svg>
+                                                </span>
+                                                <span class="simulation-trade-label font-semibold text-ellipsis">Jual</span>
+                                            </span>
                                         </button>
                                     </div>
 
                                     <!-- Status Simulasi -->
-                                    <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                    <div class="simulation-status-block mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                                         <!-- Header dengan timestamp -->
                                         <div class="flex items-center justify-between mb-2">
                                             <p
                                                 class="text-xs font-semibold text-gray-800 dark:text-gray-300 flex items-center">
-                                                <svg class="w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none"
+                                                <svg class="ui-icon w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                                                        d="M3 12h4l2-4 4 8 2-4h6">
                                                     </path>
                                                 </svg>
                                                 Status Simulasi
                                             </p>
                                             <span id="simulationTimestamp"
-                                                class="text-xxs text-gray-500 dark:text-gray-400 font-medium">
+                                                class="simulation-timestamp text-xxs text-gray-500 dark:text-gray-400 font-medium">
                                                 Update terakhir : -
                                             </span>
                                         </div>
 
                                         <div id="simulationStatus"
-                                            class="text-center p-2.5 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-900/50 dark:to-gray-800/50 rounded-lg content-fit card-elevated">
+                                            class="simulation-status-card text-center p-2.5 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-900/50 dark:to-gray-800/50 rounded-lg content-fit card-elevated">
                                             <p class="text-xs text-gray-500 dark:text-gray-400 text-ellipsis">
                                                 Klik tombol untuk memulai simulasi
                                             </p>
@@ -441,14 +431,14 @@
                             <!-- Panel Kanan: Hasil Simulasi -->
                             <div class="flex flex-col">
                                 <div id="simulationResults"
-                                    class="glass-card rounded-xl p-3 border border-subtle h-full card-elevated relative">
+                                    class="simulation-panel glass-card rounded-xl p-3 h-full card-elevated relative">
                                     <div class="flex items-center justify-between mb-3">
                                         <p
                                             class="text-xs font-semibold text-gray-800 dark:text-gray-300 flex items-center">
-                                            <svg class="w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none"
+                                            <svg class="ui-icon w-3.5 h-3.5 mr-1.5 text-gray-500" fill="none"
                                                 stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z">
                                                 </path>
                                             </svg>
                                             Hasil Simulasi
@@ -456,35 +446,33 @@
 
                                         <div class="flex items-center gap-2">
                                             <button id="openManualGramModalBtn"
-                                                class="relative p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="simulation-tool-btn relative p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Input Gram Manual" title="Input Gram Manual">
-                                                <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
+                                                <svg class="ui-icon w-5 h-5 group-hover:scale-105 transition-transform duration-200"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="1.8" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                                                 </svg>
                                             </button>
 
                                             <button id="clearSimulationBtn"
-                                                class="relative p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="simulation-tool-btn relative p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Hapus simulasi" title="Hapus simulasi">
-                                                <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
+                                                <svg class="ui-icon w-5 h-5 group-hover:scale-105 transition-transform duration-200"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="1.8"
                                                         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
                                                     </path>
                                                 </svg>
                                             </button>
 
                                             <button id="saveTradeBtn"
-                                                class="relative p-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
+                                                class="simulation-tool-btn relative p-2 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 rounded-md transition-smooth duration-300 hidden group focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 active:scale-95"
                                                 aria-label="Simpan transaksi" title="Simpan transaksi">
-                                                <svg class="w-5 h-5 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300"
+                                                <svg class="ui-icon w-5 h-5 group-hover:scale-105 transition-transform duration-200"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="1.8"
-                                                        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                        d="M5 12l4.5 4.5L19 7" />
                                                 </svg>
                                             </button>
                                         </div>
@@ -494,10 +482,10 @@
                                     <div id="noSimulation" class="text-center py-6">
                                         <div
                                             class="w-12 h-12 mx-auto mb-3 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-full">
-                                            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none"
+                                            <svg class="ui-icon w-5 h-5 text-gray-400 dark:text-gray-500" fill="none"
                                                 stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z">
                                                 </path>
                                             </svg>
                                         </div>
@@ -516,16 +504,16 @@
                 </div>
 
                 <!-- RIGHT PANEL - Trading View iframe -->
-                <div id="rightPanel" class="dashboard-side-panel border-l border-subtle relative">
+                <div id="rightPanel" class="dashboard-side-panel relative">
                     <!-- Chart Width Controls -->
                     <div class="absolute top-1 right-1 z-10 flex space-x-1">
                         <button id="chartWidthBtn"
                             class="p-1.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors duration-200"
                             title="Ubah Lebar Chart">
-                            <svg class="w-4 h-4 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor"
+                            <svg class="ui-icon w-4 h-4 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M4 5h6v14H4zM14 5h6v14h-6z">
                                 </path>
                             </svg>
                         </button>
@@ -553,9 +541,13 @@
 
                     <div class="h-full flex flex-col">
                         <div
-                            class="p-2.5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 relative">
+                            class="p-2.5 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 relative">
                             <div class="flex items-center">
-                                <span class="status-indicator status-live animate-pulse-subtle mr-1.5"></span>
+                                <svg class="ui-icon w-3.5 h-3.5 text-green-500 animate-pulse-subtle mr-1.5 flex-shrink-0"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M3 12h4l2-4 4 8 2-4h6"></path>
+                                </svg>
                                 <h4 class="text-xs font-semibold text-gray-800 dark:text-gray-100">
                                     XAU/USD Chart
                                 </h4>
@@ -582,18 +574,32 @@
         </div>
 
         <!-- Footer Status Bar -->
-        <div
-            class="status-footer mt-1.5 flex items-center justify-between text-xxs text-gray-500 dark:text-gray-400 px-1">
-            <div class="flex items-center">
-                <div class="status-indicator bg-green-500 mr-1.5"></div>
-                <span>Dashboard Emas</span>
-                <span class="mx-1.5">•</span>
-                <span>v26.05.10</span>
+        <div class="status-footer">
+            <div class="status-footer-brand">
+                <span class="status-footer-live">
+                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 12l2 2 4-5m6 3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </span>
+                <span class="status-footer-title">Dashboard Emas</span>
+                <span class="status-footer-version">v26.05.26</span>
             </div>
-            <div class="flex items-center">
-                <span>Data: Treasury.id API</span>
-                <span class="mx-1.5">•</span>
-                <span>Chart: TradingView</span>
+            <div class="status-footer-sources">
+                <span class="status-footer-source">
+                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M4 7c0-2 3.58-3 8-3s8 1 8 3-3.58 3-8 3-8-1-8-3zm0 0v5c0 2 3.58 3 8 3s8-1 8-3V7M4 12v5c0 2 3.58 3 8 3s8-1 8-3v-5"></path>
+                    </svg>
+                    Treasury.id API
+                </span>
+                <span class="status-footer-source">
+                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M4 16l5-5 4 4 7-8m0 0h-5m5 0v5"></path>
+                    </svg>
+                    TradingView
+                </span>
             </div>
         </div>
     </div>
@@ -609,16 +615,16 @@
             <!-- Header Modal -->
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center">
-                    <svg class="w-4 h-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    <svg class="ui-icon w-4 h-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
                             d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                     </svg>
                     Input Gram Manual
                 </h3>
                 <button id="closeManualGramModalBtn"
                     class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    <svg class="ui-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12">
                         </path>
                     </svg>
                 </button>
