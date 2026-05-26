@@ -804,7 +804,7 @@ async function fetchHarga() {
     // TAMPILKAN STATUS FETCHING di UI
     if (dom.lastUpdate) {
         if (state.isRetrying) {
-            dom.lastUpdate.textContent = `Retry (${state.retryCount}/${state.MAX_RETRY})`;
+            dom.lastUpdate.textContent = `retry (${state.retryCount}/${state.MAX_RETRY})`;
         } else {
             dom.lastUpdate.textContent = 'Fetching...';
         }

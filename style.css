@@ -176,6 +176,11 @@ body {
 .update-info-time {
     font-size: 1.72rem;
     line-height: 1.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .update-info-countdown {
@@ -819,7 +824,8 @@ body {
     overflow: hidden;
 }
 
-.text-ellipsis {
+.text-ellipsis,
+.truncate {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

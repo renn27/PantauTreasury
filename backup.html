@@ -563,7 +563,7 @@
                                                     <!-- Time & Countdown -->
                                                     <div class="flex items-center justify-between mb-1">
                                                         <p id="lastUpdate"
-                                                            class="text-2xl font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight">
+                                                            class="text-2xl font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight text-ellipsis">
                                                             -
                                                         </p>
                                                         <span id="countdown"
@@ -1586,7 +1586,7 @@
             // TAMPILKAN STATUS FETCHING di UI
             if (dom.lastUpdate) {
                 if (state.isRetrying) {
-                    dom.lastUpdate.textContent = `Retrying... (${state.retryCount}/${state.MAX_RETRY})`;
+                    dom.lastUpdate.textContent = `retry (${state.retryCount}/${state.MAX_RETRY})`;
                 } else {
                     dom.lastUpdate.textContent = 'Fetching...';
                 }
