@@ -101,8 +101,6 @@ let state = {
         buy: null,
         sell: null
     },
-    priceAnimationTimeoutId: null,
-    priceAnimationFrameId: null,
     previewTimeout: null
 };
 
@@ -132,7 +130,7 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
 
 // Cache DOM elements instantly on script execution (since script is deferred, DOM is ready)
 const ids = [
-    'hargaBeli', 'hargaJual', 'spreadPersen',
+    'hargaBeli', 'hargaJual', 'hargaBeliChange', 'hargaJualChange', 'spreadPersen',
     'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
     'countdown', 'countdownBar', 'simulationResults', 'noSimulation',
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
@@ -225,29 +223,66 @@ function setProfitColorClass(el, isPositive) {
     }
 }
 
-function triggerPriceChangeAnimation() {
-    if (!dom.hargaBeli || !dom.hargaJual) return;
+function renderPriceValue(el, current, previous) {
+    if (!el) return;
 
-    dom.hargaBeli.classList.remove('price-update');
-    dom.hargaJual.classList.remove('price-update');
+    el.classList.remove('price-loading');
+    el.removeAttribute('aria-busy');
+    el.textContent = formatRupiah(current);
 
-    if (state.priceAnimationFrameId) {
-        cancelAnimationFrame(state.priceAnimationFrameId);
+    if (!Number.isFinite(previous) || current === previous) return;
+
+    const isUp = current > previous;
+    const rollClass = isUp ? 'price-roll-up' : 'price-roll-down';
+    const cardClass = isUp ? 'price-card-rise' : 'price-card-fall';
+    const card = el.closest('.glass-card');
+
+    el.classList.remove('price-roll-up', 'price-roll-down');
+    card?.classList.remove('price-card-rise', 'price-card-fall');
+    void el.offsetWidth;
+    el.classList.add(rollClass);
+    card?.classList.add(cardClass);
+}
+
+function renderPriceChangeIndicator(el, current, previous) {
+    if (!el) return;
+
+    el.classList.remove('price-change-up', 'price-change-down', 'price-change-neutral');
+
+    if (!Number.isFinite(previous) || previous <= 0) {
+        el.textContent = '-';
+        el.setAttribute('aria-label', 'Belum ada perubahan harga');
+        el.classList.add('price-change-neutral');
+        return;
     }
-    if (state.priceAnimationTimeoutId) {
-        clearTimeout(state.priceAnimationTimeoutId);
+
+    const change = current - previous;
+    if (change === 0) {
+        el.innerHTML = `
+            <svg class="price-change-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12"></path>
+            </svg>
+            <span>${formatRupiah(0)}</span>
+        `;
+        el.setAttribute('aria-label', 'Harga tetap Rp 0');
+        el.classList.add('price-change-neutral');
+        return;
     }
 
-    state.priceAnimationFrameId = requestAnimationFrame(() => {
-        dom.hargaBeli.classList.add('price-update');
-        dom.hargaJual.classList.add('price-update');
-
-        state.priceAnimationTimeoutId = setTimeout(() => {
-            dom.hargaBeli.classList.remove('price-update');
-            dom.hargaJual.classList.remove('price-update');
-            state.priceAnimationTimeoutId = null;
-        }, 300);
-    });
+    const arrowPath = change > 0
+        ? 'M7 17L17 7M8 7h9v9'
+        : 'M7 7l10 10m0-9v9H8';
+    const label = change > 0 ? 'Harga naik' : 'Harga turun';
+    const direction = change > 0 ? 'price-change-up' : 'price-change-down';
+    const formattedChange = formatRupiah(Math.abs(change));
+    el.innerHTML = `
+        <svg class="price-change-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+        </svg>
+        <span>${formattedChange}</span>
+    `;
+    el.setAttribute('aria-label', `${label} ${formattedChange}`);
+    el.classList.add(direction);
 }
 
 /* ================= SHARED: Compute Derived Values ================= */
@@ -385,12 +420,14 @@ function renderCachedData() {
     const sell = Number(cached.sell);
 
     // Update harga
-    dom.hargaBeli.textContent = formatRupiah(buy);
-    dom.hargaJual.textContent = formatRupiah(sell);
+    renderPriceValue(dom.hargaBeli, buy, null);
+    renderPriceValue(dom.hargaJual, sell, null);
     state.lastRenderedBuy = buy;
     state.lastRenderedSell = sell;
     state.currentBuy = buy;
     state.currentSell = sell;
+    renderPriceChangeIndicator(dom.hargaBeliChange, buy, null);
+    renderPriceChangeIndicator(dom.hargaJualChange, sell, null);
 
     // Update timestamp
     if (dom.lastUpdate) {
@@ -955,18 +992,17 @@ function updateUI(data) {
     const buy = Number(data.buy);
     const sell = Number(data.sell);
     if (!Number.isFinite(buy) || !Number.isFinite(sell) || buy <= 0 || sell <= 0) return;
+    const previousBuy = state.lastRenderedBuy;
+    const previousSell = state.lastRenderedSell;
     state.currentBuy = buy;
     state.currentSell = sell;
 
-    const priceChanged = state.lastRenderedBuy !== buy || state.lastRenderedSell !== sell;
+    const priceChanged = previousBuy !== buy || previousSell !== sell;
 
     if (priceChanged) {
         // Update harga
-        dom.hargaBeli.textContent = formatRupiah(buy);
-        dom.hargaJual.textContent = formatRupiah(sell);
-
-        // Animation
-        triggerPriceChangeAnimation();
+        renderPriceValue(dom.hargaBeli, buy, previousBuy);
+        renderPriceValue(dom.hargaJual, sell, previousSell);
 
         // Compute dan render derived values
         const values = computeDerivedValues(buy, sell);
@@ -975,6 +1011,9 @@ function updateUI(data) {
         state.lastRenderedBuy = buy;
         state.lastRenderedSell = sell;
     }
+
+    renderPriceChangeIndicator(dom.hargaBeliChange, buy, previousBuy);
+    renderPriceChangeIndicator(dom.hargaJualChange, sell, previousSell);
 
     // Timestamp
     if (dom.lastUpdate) {

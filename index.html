@@ -177,10 +177,19 @@
 
                     <!-- ROW 2: Harga Beli & Harga Jual -->
                     <div class="price-row grid grid-cols-2 h-28 gap-2">
+                        <span class="price-spread-pill font-numeric">
+                            <span class="price-spread-label">Spread</span>
+                            <span id="spreadPersen">-</span>
+                        </span>
+
                         <!-- Harga Beli Card -->
                         <div class="price-card-shell">
                             <div
                                 class="glass-card rounded-lg p-3 h-full flex flex-col justify-between card-hover card-elevated">
+                                <p id="hargaBeliChange"
+                                    class="price-change-indicator price-change-neutral font-numeric" aria-live="polite">
+                                    -
+                                </p>
                                 <div class="text-center mb-2">
                                     <div class="flex items-center justify-center mb-1">
                                         <svg class="ui-icon w-4 h-4 text-green-500 dark:text-green-400 mr-1.5 flex-shrink-0"
@@ -196,7 +205,8 @@
 
                                 <div class="price-container">
                                     <p id="hargaBeli"
-                                        class="price-text text-green-600 dark:text-green-400 text-center w-full text-ellipsis font-numeric number-highlight">
+                                        class="price-text price-loading text-green-600 dark:text-green-400 text-center w-full text-ellipsis font-numeric number-highlight"
+                                        aria-busy="true">
                                         -
                                     </p>
                                 </div>
@@ -208,6 +218,10 @@
                         <div class="price-card-shell">
                             <div
                                 class="glass-card rounded-lg p-3 h-full flex flex-col justify-between card-hover card-elevated">
+                                <p id="hargaJualChange"
+                                    class="price-change-indicator price-change-neutral font-numeric" aria-live="polite">
+                                    -
+                                </p>
                                 <div class="text-center mb-2">
                                     <div class="flex items-center justify-center mb-1">
                                         <svg class="ui-icon w-4 h-4 text-red-500 dark:text-red-400 mr-1.5 flex-shrink-0"
@@ -223,7 +237,8 @@
 
                                 <div class="price-container">
                                     <p id="hargaJual"
-                                        class="price-text text-red-600 dark:text-red-400 text-center w-full text-ellipsis font-numeric number-highlight">
+                                        class="price-text price-loading text-red-600 dark:text-red-400 text-center w-full text-ellipsis font-numeric number-highlight"
+                                        aria-busy="true">
                                         -
                                     </p>
                                 </div>
@@ -232,30 +247,9 @@
                         </div>
                     </div>
 
-                    <!-- ROW 3: Spread + Cuan -->
+                    <!-- ROW 3: Ringkasan transaksi -->
                     <div class="stats-row min-h-0">
-                        <div class="stats-grid grid grid-cols-5 gap-2">
-                            <!-- Spread Info -->
-                            <div
-                                class="stats-card stats-spread-card glass-card rounded-lg p-3 card-hover card-elevated">
-                                <div class="flex items-center mb-1.5">
-                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0"
-                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"></path>
-                                    </svg>
-                                    <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                        Spread
-                                    </p>
-                                </div>
-                                <div class="flex items-center">
-                                    <p id="spreadPersen"
-                                        class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
-                                        -
-                                    </p>
-                                </div>
-                            </div>
-
+                        <div class="stats-grid grid grid-cols-4 gap-2">
                             <!-- Gram Beli 60jt -->
                             <div
                                 class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
@@ -582,7 +576,7 @@
                     </svg>
                 </span>
                 <span class="status-footer-title">Dashboard Emas</span>
-                <span class="status-footer-version">v26.05.26</span>
+                <span class="status-footer-version">v26.05.27</span>
             </div>
             <div class="status-footer-sources">
                 <span class="status-footer-source">
