@@ -17,6 +17,10 @@ const SIMULATION_SELL_BASE = 58005000;
 const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
+const PRICE_HISTORY_LIMIT = 30;
+const USD_IDR_WS_URL = 'wss://kicaumania8.my.id/ws';
+const USD_IDR_RECONNECT_MS = 15000;
+const USD_IDR_RECONNECT_MAX_MS = 120000;
 const DEBUG = false;
 
 /* ================= INSTANT LOAD ================= */
@@ -91,6 +95,13 @@ let state = {
     lastRenderedSell: null,
     lastSimulationStorageKey: null,
     simulationStorageLastSavedAt: 0,
+    usdIdrWs: null,
+    usdIdrReconnectTimeoutId: null,
+    usdIdrReconnectAttempt: 0,
+    usdIdrLastPrice: null,
+    usdIdrLastChange: null,
+    usdIdrHistory: [],
+    priceHistory: [],
     currentBuy: null,
     currentSell: null,
     simulationNodes: {
@@ -130,26 +141,35 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
 
 // Cache DOM elements instantly on script execution (since script is deferred, DOM is ready)
 const ids = [
-    'hargaBeli', 'hargaJual', 'hargaBeliChange', 'hargaJualChange', 'spreadPersen',
+    'buyPriceCard', 'sellPriceCard', 'hargaBeli', 'hargaJual', 'hargaBeliChange', 'hargaJualChange', 'spreadPersen',
     'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
     'countdown', 'countdownBar', 'simulationResults', 'noSimulation',
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
     'refreshApiBtn', 'themeText', 'bigRefreshBtn',
-    'chartWidthBtn', 'chartWidthMenu', 'dashboardGrid',
+    'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
     'leftPanel', 'rightPanel', 'clearSimulationBtn', 'saveTradeBtn', 'simulationTimestamp',
     'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
     'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
     'manualBuyPricePreview', 'manualSellPricePreview',
-    'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent'
+    'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent',
+    'usdIdrCard', 'usdIdrRate', 'usdIdrTime', 'usdIdrChange',
+    'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
+    'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
+    'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
 });
 
 // Render cached data immediately
+loadPriceHistory();
+renderPriceHistoryDropdown('buy');
+renderPriceHistoryDropdown('sell');
 renderCachedData();
 // Fetch fresh data immediately (starts network request parallel to DOM Ready parsing)
 fetchHarga();
+renderCachedUsdIdr();
+connectUsdIdrFeed();
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
@@ -285,6 +305,477 @@ function renderPriceChangeIndicator(el, current, previous) {
     el.classList.add(direction);
 }
 
+function getPriceHistoryStorageKey() {
+    return 'treasury_price_history';
+}
+
+function loadPriceHistory() {
+    try {
+        const saved = localStorage.getItem(getPriceHistoryStorageKey());
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) return;
+
+        state.priceHistory = parsed
+            .map(item => ({
+                buy: Number(item.buy),
+                sell: Number(item.sell),
+                updated: item.updated
+            }))
+            .filter(item => Number.isFinite(item.buy) && Number.isFinite(item.sell) && item.updated)
+            .slice(-PRICE_HISTORY_LIMIT);
+    } catch (e) { }
+}
+
+function savePriceHistory() {
+    try {
+        localStorage.setItem(
+            getPriceHistoryStorageKey(),
+            JSON.stringify(state.priceHistory.slice(-PRICE_HISTORY_LIMIT))
+        );
+    } catch (e) { }
+}
+
+function addPriceHistoryEntry(data) {
+    const buy = Number(data.buy);
+    const sell = Number(data.sell);
+    if (!Number.isFinite(buy) || !Number.isFinite(sell) || !data.updated) return;
+
+    const latest = state.priceHistory[state.priceHistory.length - 1];
+    if (latest && latest.updated === data.updated && latest.buy === buy && latest.sell === sell) {
+        return;
+    }
+
+    state.priceHistory.push({ buy, sell, updated: data.updated });
+    state.priceHistory = state.priceHistory.slice(-PRICE_HISTORY_LIMIT);
+    savePriceHistory();
+    renderPriceHistoryDropdown('buy');
+    renderPriceHistoryDropdown('sell');
+}
+
+function getPriceHistoryElements(type) {
+    const isBuy = type === 'buy';
+    return {
+        card: isBuy ? dom.buyPriceCard : dom.sellPriceCard,
+        dropdown: isBuy ? dom.buyPriceHistoryDropdown : dom.sellPriceHistoryDropdown,
+        list: isBuy ? dom.buyPriceHistoryList : dom.sellPriceHistoryList,
+        count: isBuy ? dom.buyPriceHistoryCount : dom.sellPriceHistoryCount
+    };
+}
+
+function renderPriceHistoryDropdown(type) {
+    const { list, count } = getPriceHistoryElements(type);
+    if (!list) return;
+
+    const history = state.priceHistory || [];
+    if (count) count.textContent = String(history.length);
+
+    if (!history.length) {
+        list.innerHTML = '<p class="price-history-empty">Menunggu data</p>';
+        return;
+    }
+
+    const valueKey = type === 'buy' ? 'buy' : 'sell';
+    list.innerHTML = history
+        .slice()
+        .reverse()
+        .map((item, index, reversed) => {
+            const nextOlder = reversed[index + 1];
+            const value = Number(item[valueKey]);
+            const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
+            const directionClass = change > 0
+                ? 'usd-idr-history-pill-up'
+                : change < 0
+                    ? 'usd-idr-history-pill-down'
+                    : 'usd-idr-history-pill-neutral';
+            const arrowPath = change > 0
+                ? 'M7 17L17 7M8 7h9v9'
+                : change < 0
+                    ? 'M7 7l10 10m0-9v9H8'
+                    : 'M6 12h12';
+            const updated = new Date(item.updated);
+            const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
+
+            return `
+            <div class="price-history-item">
+                <span class="price-history-time font-numeric">${time}</span>
+                <span class="price-history-value">
+                    <span class="price-history-price font-numeric">${formatRupiah(value)}</span>
+                    <span class="usd-idr-history-pill ${directionClass} font-numeric">
+                        <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+                        </svg>
+                        <span>${change === 0 ? formatRupiah(0) : formatRupiah(Math.abs(change))}</span>
+                    </span>
+                </span>
+            </div>
+        `;
+        })
+        .join('');
+}
+
+function togglePriceHistoryDropdown(type, forceOpen) {
+    const { card, dropdown } = getPriceHistoryElements(type);
+    if (!card || !dropdown) return;
+
+    const shouldOpen = forceOpen === undefined
+        ? dropdown.classList.contains('hidden')
+        : forceOpen;
+
+    dropdown.classList.toggle('hidden', !shouldOpen);
+    card.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+    if (shouldOpen) {
+        const otherType = type === 'buy' ? 'sell' : 'buy';
+        togglePriceHistoryDropdown(otherType, false);
+        toggleUsdIdrHistoryDropdown(false);
+        renderPriceHistoryDropdown(type);
+    }
+}
+
+function parseUsdIdrPrice(rawPrice) {
+    if (!rawPrice) return null;
+    const normalized = String(rawPrice).trim().replace(/,/g, '');
+    const value = Number(normalized);
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function formatUsdIdrRate(value) {
+    return new Intl.NumberFormat('id-ID', {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4
+    }).format(value);
+}
+
+function renderUsdIdrRate(price, time, comparisonPrice) {
+    if (!dom.usdIdrRate) return;
+
+    const value = parseUsdIdrPrice(price);
+    if (!value) return;
+
+    const previous = comparisonPrice === undefined ? state.usdIdrLastPrice : comparisonPrice;
+    state.usdIdrLastPrice = value;
+
+    dom.usdIdrRate.textContent = formatUsdIdrRate(value);
+    dom.usdIdrRate.classList.remove(
+        'text-green-600', 'dark:text-green-400',
+        'text-red-600', 'dark:text-red-400',
+        'text-gray-900', 'dark:text-gray-100'
+    );
+
+    if (Number.isFinite(previous) && previous !== value) {
+        const isUp = value > previous;
+        dom.usdIdrRate.classList.add(
+            isUp ? 'text-green-600' : 'text-red-600',
+            isUp ? 'dark:text-green-400' : 'dark:text-red-400'
+        );
+    } else {
+        dom.usdIdrRate.classList.add('text-gray-900', 'dark:text-gray-100');
+    }
+
+    if (Number.isFinite(previous) && previous > 0 && previous !== value) {
+        renderUsdIdrChangeIndicator(value, previous);
+    }
+
+    setUsdIdrStatus(time || 'Live');
+
+    try {
+        localStorage.setItem('usd_idr_cache', JSON.stringify({ price, time, savedAt: Date.now() }));
+    } catch (e) { }
+}
+
+function setUsdIdrStatus(text) {
+    if (!dom.usdIdrTime) return;
+    dom.usdIdrTime.textContent = text;
+}
+
+function renderUsdIdrChangeIndicator(current, previous) {
+    if (!dom.usdIdrChange) return;
+
+    dom.usdIdrChange.classList.remove('price-change-up', 'price-change-down', 'price-change-neutral');
+
+    const change = current - previous;
+    const arrowPath = change > 0
+        ? 'M7 17L17 7M8 7h9v9'
+        : 'M7 7l10 10m0-9v9H8';
+    const direction = change > 0 ? 'price-change-up' : 'price-change-down';
+    const label = change > 0 ? 'USD IDR naik' : 'USD IDR turun';
+    const formattedChange = formatUsdIdrRate(Math.abs(change));
+
+    dom.usdIdrChange.innerHTML = `
+        <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+        </svg>
+        <span>${formattedChange}</span>
+    `;
+    dom.usdIdrChange.setAttribute('aria-label', `${label} ${formattedChange}`);
+    dom.usdIdrChange.classList.add(direction);
+
+    state.usdIdrLastChange = {
+        current,
+        previous,
+        direction,
+        formattedChange,
+        label
+    };
+
+    try {
+        localStorage.setItem('usd_idr_change_cache', JSON.stringify(state.usdIdrLastChange));
+    } catch (e) { }
+}
+
+function renderCachedUsdIdrChange() {
+    if (!dom.usdIdrChange) return;
+
+    try {
+        const saved = localStorage.getItem('usd_idr_change_cache');
+        if (!saved) return;
+        const cached = JSON.parse(saved);
+        if (!cached || !cached.direction || !cached.formattedChange) return;
+
+        state.usdIdrLastChange = cached;
+        const arrowPath = cached.direction === 'price-change-up'
+            ? 'M7 17L17 7M8 7h9v9'
+            : 'M7 7l10 10m0-9v9H8';
+
+        dom.usdIdrChange.classList.remove('price-change-up', 'price-change-down', 'price-change-neutral');
+        dom.usdIdrChange.innerHTML = `
+            <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+            </svg>
+            <span>${cached.formattedChange}</span>
+        `;
+        dom.usdIdrChange.setAttribute('aria-label', `${cached.label || 'USD IDR berubah'} ${cached.formattedChange}`);
+        dom.usdIdrChange.classList.add(cached.direction);
+    } catch (e) { }
+}
+
+function findUsdIdrComparisonPrice(history, latestValue) {
+    if (Number.isFinite(state.usdIdrLastPrice) && state.usdIdrLastPrice > 0 && state.usdIdrLastPrice !== latestValue) {
+        return state.usdIdrLastPrice;
+    }
+
+    for (let i = history.length - 2; i >= 0; i--) {
+        const candidate = parseUsdIdrPrice(history[i]?.price);
+        if (candidate && candidate !== latestValue) return candidate;
+    }
+
+    return state.usdIdrLastPrice;
+}
+
+function renderUsdIdrHistory(history) {
+    if (!Array.isArray(history) || !history.length) return;
+
+    const normalizedHistory = history
+        .map(item => ({
+            price: item?.price,
+            time: item?.time,
+            value: parseUsdIdrPrice(item?.price)
+        }))
+        .filter(item => item.value);
+
+    if (!normalizedHistory.length) return;
+
+    state.usdIdrHistory = normalizedHistory;
+    renderUsdIdrHistoryDropdown();
+
+    let latest = null;
+    for (let i = history.length - 1; i >= 0; i--) {
+        const value = parseUsdIdrPrice(history[i]?.price);
+        if (value) {
+            latest = { ...history[i], value };
+            break;
+        }
+    }
+
+    if (!latest) return;
+
+    const comparisonPrice = findUsdIdrComparisonPrice(history, latest.value);
+    renderUsdIdrRate(latest.price, latest.time, comparisonPrice);
+}
+
+function renderUsdIdrHistoryDropdown() {
+    if (!dom.usdIdrHistoryList) return;
+
+    const history = state.usdIdrHistory || [];
+    if (dom.usdIdrHistoryCount) dom.usdIdrHistoryCount.textContent = String(history.length);
+
+    if (!history.length) {
+        dom.usdIdrHistoryList.innerHTML = '<p class="usd-idr-history-empty">Menunggu data</p>';
+        return;
+    }
+
+    dom.usdIdrHistoryList.innerHTML = history
+        .slice()
+        .reverse()
+        .map((item, index, reversed) => {
+            const nextOlder = reversed[index + 1];
+            const change = nextOlder ? item.value - nextOlder.value : 0;
+            const directionClass = change > 0
+                ? 'usd-idr-history-pill-up'
+                : change < 0
+                    ? 'usd-idr-history-pill-down'
+                    : 'usd-idr-history-pill-neutral';
+            const arrowPath = change > 0
+                ? 'M7 17L17 7M8 7h9v9'
+                : change < 0
+                    ? 'M7 7l10 10m0-9v9H8'
+                    : 'M6 12h12';
+            const pillValue = change === 0 ? '0,0000' : formatUsdIdrRate(Math.abs(change));
+
+            return `
+            <div class="usd-idr-history-item">
+                <span class="usd-idr-history-time font-numeric">${item.time || '-'}</span>
+                <span class="usd-idr-history-value">
+                    <span class="usd-idr-history-price font-numeric">${formatUsdIdrRate(item.value)}</span>
+                    <span class="usd-idr-history-pill ${directionClass} font-numeric">
+                        <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+                        </svg>
+                        <span>${pillValue}</span>
+                    </span>
+                </span>
+            </div>
+        `;
+        })
+        .join('');
+}
+
+function toggleUsdIdrHistoryDropdown(forceOpen) {
+    if (!dom.usdIdrCard || !dom.usdIdrHistoryDropdown) return;
+
+    const shouldOpen = forceOpen === undefined
+        ? dom.usdIdrHistoryDropdown.classList.contains('hidden')
+        : forceOpen;
+
+    dom.usdIdrHistoryDropdown.classList.toggle('hidden', !shouldOpen);
+    dom.usdIdrCard.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+    if (shouldOpen) {
+        togglePriceHistoryDropdown('buy', false);
+        togglePriceHistoryDropdown('sell', false);
+        renderUsdIdrHistoryDropdown();
+    }
+}
+
+function renderCachedUsdIdr() {
+    try {
+        const saved = localStorage.getItem('usd_idr_cache');
+        if (!saved) return;
+        const cached = JSON.parse(saved);
+        if (!cached || !cached.price) return;
+        renderUsdIdrRate(cached.price, cached.time);
+        renderCachedUsdIdrChange();
+        setUsdIdrStatus(cached.time ? `Cached ${cached.time}` : 'Cached');
+    } catch (e) { }
+}
+
+function setUsdIdrUnavailableStatus(text = 'Tidak tersedia') {
+    if (state.usdIdrLastPrice) {
+        setUsdIdrStatus(text);
+        return;
+    }
+
+    if (dom.usdIdrRate) dom.usdIdrRate.textContent = '-';
+    if (dom.usdIdrChange) {
+        dom.usdIdrChange.textContent = '-';
+        dom.usdIdrChange.classList.remove('price-change-up', 'price-change-down');
+        dom.usdIdrChange.classList.add('price-change-neutral');
+        dom.usdIdrChange.setAttribute('aria-label', text);
+    }
+    setUsdIdrStatus(text);
+}
+
+function scheduleUsdIdrReconnect() {
+    if (state.usdIdrReconnectTimeoutId) {
+        clearTimeout(state.usdIdrReconnectTimeoutId);
+        state.usdIdrReconnectTimeoutId = null;
+    }
+
+    if (document.hidden || navigator.onLine === false) return;
+
+    const delay = Math.min(
+        USD_IDR_RECONNECT_MAX_MS,
+        USD_IDR_RECONNECT_MS * Math.max(1, 2 ** state.usdIdrReconnectAttempt)
+    );
+    const jitter = Math.floor(Math.random() * 1000);
+
+    state.usdIdrReconnectAttempt += 1;
+    state.usdIdrReconnectTimeoutId = setTimeout(connectUsdIdrFeed, delay + jitter);
+}
+
+function closeUsdIdrFeed() {
+    if (state.usdIdrReconnectTimeoutId) {
+        clearTimeout(state.usdIdrReconnectTimeoutId);
+        state.usdIdrReconnectTimeoutId = null;
+    }
+
+    const ws = state.usdIdrWs;
+    state.usdIdrWs = null;
+
+    if (!ws) return;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+
+    if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+        ws.close(1000, 'paused');
+    }
+}
+
+function connectUsdIdrFeed() {
+    if (!dom.usdIdrRate || typeof WebSocket === 'undefined') return;
+    if (document.hidden || navigator.onLine === false) return;
+
+    if (state.usdIdrWs && (
+        state.usdIdrWs.readyState === WebSocket.CONNECTING ||
+        state.usdIdrWs.readyState === WebSocket.OPEN
+    )) {
+        return;
+    }
+
+    if (state.usdIdrReconnectTimeoutId) {
+        clearTimeout(state.usdIdrReconnectTimeoutId);
+        state.usdIdrReconnectTimeoutId = null;
+    }
+
+    try {
+        const ws = new WebSocket(USD_IDR_WS_URL);
+        state.usdIdrWs = ws;
+
+        ws.onopen = () => {
+            state.usdIdrReconnectAttempt = 0;
+            if (dom.usdIdrTime && !state.usdIdrLastPrice) {
+                setUsdIdrStatus('Connected');
+            }
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+                const history = payload.usd_idr_history;
+                renderUsdIdrHistory(history);
+            } catch (e) { }
+        };
+
+        ws.onerror = () => {
+            if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        };
+
+        ws.onclose = () => {
+            if (state.usdIdrWs === ws) state.usdIdrWs = null;
+            setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting' : 'Tidak tersedia');
+            scheduleUsdIdrReconnect();
+        };
+    } catch (e) {
+        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting' : 'Tidak tersedia');
+        scheduleUsdIdrReconnect();
+    }
+}
+
 /* ================= SHARED: Compute Derived Values ================= */
 function computeDerivedValues(buy, sell) {
     const spread = buy - sell;
@@ -300,7 +791,7 @@ function computeDerivedValues(buy, sell) {
 function renderDerivedValues(values) {
     const { spread, spreadPercent, gramBeli, gramJual, nilaiJual, cuan } = values;
 
-    if (dom.spreadPersen) dom.spreadPersen.textContent = `${spreadPercent}%`;
+    if (dom.spreadPersen) dom.spreadPersen.textContent = `-${spreadPercent} %`;
     if (dom.gramBeli) dom.gramBeli.textContent = `${gramBeli.toFixed(4)} g`;
     if (dom.gramJual) dom.gramJual.textContent = `${gramJual} g`;
     if (dom.nilaiJual) dom.nilaiJual.textContent = formatRupiah(nilaiJual);
@@ -708,12 +1199,71 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (dom.settingsBtn) {
+        dom.settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dom.settingsMenu?.classList.toggle('hidden');
+            dom.chartWidthMenu?.classList.add('hidden');
+        });
+    }
+
+    if (dom.settingsMenu) {
+        dom.settingsMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (e.target.closest('.settings-menu-item')) {
+                setTimeout(() => dom.settingsMenu.classList.add('hidden'), 0);
+            }
+        });
+    }
+
+    if (dom.usdIdrCard) {
+        dom.usdIdrCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleUsdIdrHistoryDropdown();
+        });
+
+        dom.usdIdrCard.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            e.stopPropagation();
+            toggleUsdIdrHistoryDropdown();
+        });
+    }
+
+    dom.usdIdrHistoryDropdown?.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    [
+        { type: 'buy', card: dom.buyPriceCard, dropdown: dom.buyPriceHistoryDropdown },
+        { type: 'sell', card: dom.sellPriceCard, dropdown: dom.sellPriceHistoryDropdown }
+    ].forEach(({ type, card, dropdown }) => {
+        if (card) {
+            card.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePriceHistoryDropdown(type);
+            });
+
+            card.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                togglePriceHistoryDropdown(type);
+            });
+        }
+
+        dropdown?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+
     // Chart width controls
     if (dom.chartWidthBtn) {
         dom.chartWidthBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const menu = dom.chartWidthMenu;
             menu.classList.toggle('hidden');
+            dom.settingsMenu?.classList.add('hidden');
         });
     }
 
@@ -732,11 +1282,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Close chart width menu when clicking outside
+    // Close floating chart menus when clicking outside
     document.addEventListener('click', () => {
         if (dom.chartWidthMenu && !dom.chartWidthMenu.classList.contains('hidden')) {
             dom.chartWidthMenu.classList.add('hidden');
         }
+        if (dom.settingsMenu && !dom.settingsMenu.classList.contains('hidden')) {
+            dom.settingsMenu.classList.add('hidden');
+        }
+        toggleUsdIdrHistoryDropdown(false);
+        togglePriceHistoryDropdown('buy', false);
+        togglePriceHistoryDropdown('sell', false);
     });
 
     // Dark mode button
@@ -783,6 +1339,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(state.timerTicker);
                 state.timerTicker = null;
             }
+            closeUsdIdrFeed();
         } else {
             if (!state.timerTicker) {
                 startTimers();
@@ -790,7 +1347,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.countdown <= 0 && !state.isFetching) {
                 fetchHarga();
             }
+            connectUsdIdrFeed();
         }
+    });
+
+    window.addEventListener('offline', () => {
+        closeUsdIdrFeed();
+        setUsdIdrUnavailableStatus('Offline');
+    });
+
+    window.addEventListener('online', () => {
+        state.usdIdrReconnectAttempt = 0;
+        connectUsdIdrFeed();
     });
 
 
@@ -996,6 +1564,7 @@ function updateUI(data) {
     const previousSell = state.lastRenderedSell;
     state.currentBuy = buy;
     state.currentSell = sell;
+    addPriceHistoryEntry(data);
 
     const priceChanged = previousBuy !== buy || previousSell !== sell;
 
