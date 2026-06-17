@@ -18,9 +18,8 @@ const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
-const USD_IDR_WS_URL = 'wss://embegeh.my.id/ws';
-const USD_IDR_RECONNECT_MS = 15000;
-const USD_IDR_RECONNECT_MAX_MS = 120000;
+const USD_IDR_API_URL = 'https://open.er-api.com/v6/latest/USD';
+const USD_IDR_POLL_MS = 5 * 60 * 1000; // poll setiap 5 menit
 const DEBUG = false;
 
 /* ================= INSTANT LOAD ================= */
@@ -95,9 +94,7 @@ let state = {
     lastRenderedSell: null,
     lastSimulationStorageKey: null,
     simulationStorageLastSavedAt: 0,
-    usdIdrWs: null,
-    usdIdrReconnectTimeoutId: null,
-    usdIdrReconnectAttempt: 0,
+    usdIdrPollTimeoutId: null,
     usdIdrLastPrice: null,
     usdIdrLastChange: null,
     usdIdrHistory: [],
@@ -686,103 +683,61 @@ function setUsdIdrUnavailableStatus(text = 'Tidak tersedia') {
     setUsdIdrStatus(text);
 }
 
-function scheduleUsdIdrReconnect() {
-    if (state.usdIdrReconnectTimeoutId) {
-        clearTimeout(state.usdIdrReconnectTimeoutId);
-        state.usdIdrReconnectTimeoutId = null;
+function scheduleUsdIdrPoll(immediate = false) {
+    if (state.usdIdrPollTimeoutId) {
+        clearTimeout(state.usdIdrPollTimeoutId);
+        state.usdIdrPollTimeoutId = null;
     }
-
-    if (document.hidden || navigator.onLine === false) return;
-
-    const delay = Math.min(
-        USD_IDR_RECONNECT_MAX_MS,
-        USD_IDR_RECONNECT_MS * Math.max(1, 2 ** state.usdIdrReconnectAttempt)
-    );
-    const jitter = Math.floor(Math.random() * 1000);
-
-    state.usdIdrReconnectAttempt += 1;
-    state.usdIdrReconnectTimeoutId = setTimeout(connectUsdIdrFeed, delay + jitter);
+    const delay = immediate ? 0 : USD_IDR_POLL_MS;
+    state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, delay);
 }
 
 function closeUsdIdrFeed() {
-    if (state.usdIdrReconnectTimeoutId) {
-        clearTimeout(state.usdIdrReconnectTimeoutId);
-        state.usdIdrReconnectTimeoutId = null;
-    }
-
-    const ws = state.usdIdrWs;
-    state.usdIdrWs = null;
-
-    if (!ws) return;
-    ws.onopen = null;
-    ws.onmessage = null;
-    ws.onerror = null;
-    ws.onclose = null;
-
-    if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
-        ws.close(1000, 'paused');
+    if (state.usdIdrPollTimeoutId) {
+        clearTimeout(state.usdIdrPollTimeoutId);
+        state.usdIdrPollTimeoutId = null;
     }
 }
 
 async function connectUsdIdrFeed() {
-    if (!dom.usdIdrRate || typeof WebSocket === 'undefined') return;
-    if (document.hidden || navigator.onLine === false) return;
-
-    if (state.usdIdrWs && (
-        state.usdIdrWs.readyState === WebSocket.CONNECTING ||
-        state.usdIdrWs.readyState === WebSocket.OPEN
-    )) {
+    if (!dom.usdIdrRate) return;
+    if (document.hidden || navigator.onLine === false) {
+        scheduleUsdIdrPoll();
         return;
     }
 
-    if (state.usdIdrReconnectTimeoutId) {
-        clearTimeout(state.usdIdrReconnectTimeoutId);
-        state.usdIdrReconnectTimeoutId = null;
-    }
-
     try {
-        // Fetch token/ticket first due to ticket authorization requirement (no custom headers to avoid CORS preflight)
-        const ticketRes = await fetch('https://embegeh.my.id/api/get-ticket');
-        if (!ticketRes.ok) throw new Error('Failed to retrieve ticket');
-        const ticketData = await ticketRes.json();
-        const ticket = ticketData.ticket;
+        const res = await fetch(USD_IDR_API_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-        const wsUrl = `${USD_IDR_WS_URL}?ticket=${ticket}`;
-        const ws = new WebSocket(wsUrl);
-        state.usdIdrWs = ws;
+        if (data.result !== 'success' || !data.rates || !data.rates.IDR) {
+            throw new Error('Data tidak valid');
+        }
 
-        ws.onopen = () => {
-            state.usdIdrReconnectAttempt = 0;
-            if (dom.usdIdrTime && !state.usdIdrLastPrice) {
-                setUsdIdrStatus('Connected');
-            }
-        };
+        const idrRate = data.rates.IDR;
+        const timeLabel = new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
 
-        ws.onmessage = (event) => {
-            try {
-                const payload = JSON.parse(event.data);
-                const history = payload.usd_idr_history;
-                renderUsdIdrHistory(history);
-            } catch (e) { }
-        };
+        // Masukkan ke history format yg sama dgn sebelumnya
+        const newEntry = { price: idrRate.toFixed(4), time: timeLabel, value: idrRate };
 
-        ws.onerror = (err) => {
-            console.error('WebSocket error:', err);
-            if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
-        };
+        // Tambahkan ke state history (max 30 entri)
+        state.usdIdrHistory = [...state.usdIdrHistory, newEntry].slice(-30);
+        renderUsdIdrHistoryDropdown();
 
-        ws.onclose = (evt) => {
-            console.warn('WebSocket closed. Code:', evt.code, 'Reason:', evt.reason);
-            if (state.usdIdrWs === ws) state.usdIdrWs = null;
-            setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? `Reconnecting (Closed: ${evt.code})` : 'Tidak tersedia');
-            scheduleUsdIdrReconnect();
-        };
+        // Render rate ke UI
+        const previous = state.usdIdrLastPrice;
+        renderUsdIdrRate(idrRate.toFixed(4), `Live ${timeLabel}`, previous);
+
+        // Jadwalkan poll berikutnya
+        scheduleUsdIdrPoll();
     } catch (e) {
-        console.error('Error in connectUsdIdrFeed:', e);
-        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? `Reconnecting (${e.message || e})` : 'Tidak tersedia');
-        scheduleUsdIdrReconnect();
+        debugLog('USD/IDR fetch error:', e);
+        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
+        // Coba lagi lebih cepat jika gagal (30 detik)
+        state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 30000);
     }
 }
 
