@@ -18,7 +18,7 @@ const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
-const USD_IDR_WS_URL = 'wss://kicaumania8.my.id/ws';
+const USD_IDR_WS_URL = 'wss://embegeh.my.id/ws';
 const USD_IDR_RECONNECT_MS = 15000;
 const USD_IDR_RECONNECT_MAX_MS = 120000;
 const DEBUG = false;
@@ -724,7 +724,7 @@ function closeUsdIdrFeed() {
     }
 }
 
-function connectUsdIdrFeed() {
+async function connectUsdIdrFeed() {
     if (!dom.usdIdrRate || typeof WebSocket === 'undefined') return;
     if (document.hidden || navigator.onLine === false) return;
 
@@ -741,7 +741,14 @@ function connectUsdIdrFeed() {
     }
 
     try {
-        const ws = new WebSocket(USD_IDR_WS_URL);
+        // Fetch token/ticket first due to ticket authorization requirement (no custom headers to avoid CORS preflight)
+        const ticketRes = await fetch('https://embegeh.my.id/api/get-ticket');
+        if (!ticketRes.ok) throw new Error('Failed to retrieve ticket');
+        const ticketData = await ticketRes.json();
+        const ticket = ticketData.ticket;
+
+        const wsUrl = `${USD_IDR_WS_URL}?ticket=${ticket}`;
+        const ws = new WebSocket(wsUrl);
         state.usdIdrWs = ws;
 
         ws.onopen = () => {
@@ -759,19 +766,22 @@ function connectUsdIdrFeed() {
             } catch (e) { }
         };
 
-        ws.onerror = () => {
+        ws.onerror = (err) => {
+            console.error('WebSocket error:', err);
             if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
                 ws.close();
             }
         };
 
-        ws.onclose = () => {
+        ws.onclose = (evt) => {
+            console.warn('WebSocket closed. Code:', evt.code, 'Reason:', evt.reason);
             if (state.usdIdrWs === ws) state.usdIdrWs = null;
-            setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting' : 'Tidak tersedia');
+            setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? `Reconnecting (Closed: ${evt.code})` : 'Tidak tersedia');
             scheduleUsdIdrReconnect();
         };
     } catch (e) {
-        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting' : 'Tidak tersedia');
+        console.error('Error in connectUsdIdrFeed:', e);
+        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? `Reconnecting (${e.message || e})` : 'Tidak tersedia');
         scheduleUsdIdrReconnect();
     }
 }
