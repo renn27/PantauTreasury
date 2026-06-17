@@ -18,8 +18,10 @@ const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
-const USD_IDR_API_URL = 'https://open.er-api.com/v6/latest/USD';
-const USD_IDR_POLL_MS = 5 * 60 * 1000; // poll setiap 5 menit
+const USD_IDR_WORKER_URL = ''; // Isi dengan URL Cloudflare Worker jika sudah deploy, cth: 'https://pantau-ticket.USERNAME.workers.dev'
+const USD_IDR_API_URL = 'https://open.er-api.com/v6/latest/USD'; // Fallback jika Worker belum di-set
+const USD_IDR_WS_URL = 'wss://embegeh.my.id/ws';
+const USD_IDR_POLL_MS = 5 * 60 * 1000; // poll setiap 5 menit (mode fallback)
 const DEBUG = false;
 
 /* ================= INSTANT LOAD ================= */
@@ -95,6 +97,8 @@ let state = {
     lastSimulationStorageKey: null,
     simulationStorageLastSavedAt: 0,
     usdIdrPollTimeoutId: null,
+    usdIdrWs: null,
+    usdIdrReconnectAttempt: 0,
     usdIdrLastPrice: null,
     usdIdrLastChange: null,
     usdIdrHistory: [],
@@ -706,6 +710,56 @@ async function connectUsdIdrFeed() {
         return;
     }
 
+    // === MODE 1: embegeh WebSocket via Cloudflare Worker proxy ===
+    if (USD_IDR_WORKER_URL) {
+        try {
+            const ticketRes = await fetch(USD_IDR_WORKER_URL);
+            if (!ticketRes.ok) throw new Error(`Ticket HTTP ${ticketRes.status}`);
+            const ticketData = await ticketRes.json();
+            const ticket = ticketData.ticket;
+            if (!ticket) throw new Error('Tiket tidak valid');
+
+            // Tutup koneksi lama jika ada
+            if (state.usdIdrWs) {
+                state.usdIdrWs.onclose = null;
+                state.usdIdrWs.close();
+                state.usdIdrWs = null;
+            }
+
+            const ws = new WebSocket(`${USD_IDR_WS_URL}?ticket=${ticket}`);
+            state.usdIdrWs = ws;
+
+            ws.onopen = () => {
+                state.usdIdrReconnectAttempt = 0;
+                if (!state.usdIdrLastPrice) setUsdIdrStatus('Live');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.usd_idr_history) renderUsdIdrHistory(payload.usd_idr_history);
+                } catch (e) { }
+            };
+
+            ws.onerror = () => {
+                if (ws.readyState === WebSocket.OPEN) ws.close();
+            };
+
+            ws.onclose = () => {
+                if (state.usdIdrWs === ws) state.usdIdrWs = null;
+                setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting...' : 'Tidak tersedia');
+                // Reconnect: ambil tiket baru lagi
+                state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 15000);
+            };
+
+            return; // Selesai - koneksi WS berhasil dibuat
+        } catch (e) {
+            debugLog('embegeh WS error, fallback ke polling:', e);
+            // Lanjut ke mode fallback di bawah
+        }
+    }
+
+    // === MODE 2: Fallback - HTTP Polling open.er-api.com ===
     try {
         const res = await fetch(USD_IDR_API_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -720,23 +774,17 @@ async function connectUsdIdrFeed() {
             hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
         });
 
-        // Masukkan ke history format yg sama dgn sebelumnya
         const newEntry = { price: idrRate.toFixed(4), time: timeLabel, value: idrRate };
-
-        // Tambahkan ke state history (max 30 entri)
         state.usdIdrHistory = [...state.usdIdrHistory, newEntry].slice(-30);
         renderUsdIdrHistoryDropdown();
 
-        // Render rate ke UI
         const previous = state.usdIdrLastPrice;
         renderUsdIdrRate(idrRate.toFixed(4), `Live ${timeLabel}`, previous);
 
-        // Jadwalkan poll berikutnya
         scheduleUsdIdrPoll();
     } catch (e) {
         debugLog('USD/IDR fetch error:', e);
         setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
-        // Coba lagi lebih cepat jika gagal (30 detik)
         state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 30000);
     }
 }
