@@ -18,7 +18,7 @@ const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
-const USD_IDR_WORKER_URL = ''; // Isi dengan URL Cloudflare Worker jika sudah deploy, cth: 'https://pantau-ticket.USERNAME.workers.dev'
+const USD_IDR_WORKER_URL = 'tight-morning-90aa.ambaneguriha.workers.dev'; // Isi dengan URL Cloudflare Worker jika sudah deploy, cth: 'https://pantau-ticket.USERNAME.workers.dev'
 const USD_IDR_API_URL = 'https://open.er-api.com/v6/latest/USD'; // Fallback jika Worker belum di-set
 const USD_IDR_WS_URL = 'wss://embegeh.my.id/ws';
 const USD_IDR_POLL_MS = 5 * 60 * 1000; // poll setiap 5 menit (mode fallback)
@@ -1115,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.manualGramModal.classList.remove('opacity-0');
             dom.manualGramModalContent.classList.remove('scale-95');
             dom.manualGramModalContent.classList.add('scale-100');
-            
+
             // Focus on input when opened
             setTimeout(() => {
                 if (dom.manualGramInput) dom.manualGramInput.focus();
@@ -1870,7 +1870,7 @@ function saveSimulationToStorage() {
         });
         if (typeof requestIdleCallback === 'function') {
             requestIdleCallback(() => {
-                try { localStorage.setItem('gold_simulation', payload); } catch (e) {}
+                try { localStorage.setItem('gold_simulation', payload); } catch (e) { }
             });
         } else {
             localStorage.setItem('gold_simulation', payload);
