@@ -554,9 +554,9 @@ body {
 }
 
 .price-history-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 4rem 7.5rem 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
     border-radius: 0.45rem;
     padding: 0.4rem 0.45rem;
@@ -576,6 +576,37 @@ body {
     background: rgba(51, 65, 85, 0.72);
 }
 
+/* Clickable rows (klik untuk simulasi) */
+.price-history-item--clickable {
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    user-select: none;
+    outline: none;
+}
+
+.price-history-item--clickable:hover {
+    background: #e0f2fe !important;
+    box-shadow: inset 0 0 0 1.5px rgba(14, 165, 233, 0.3);
+}
+
+.price-history-item--clickable:active {
+    transform: scale(0.985);
+    background: #bae6fd !important;
+}
+
+.dark .price-history-item--clickable:hover {
+    background: rgba(14, 165, 233, 0.12) !important;
+    box-shadow: inset 0 0 0 1.5px rgba(56, 189, 248, 0.25);
+}
+
+.dark .price-history-item--clickable:active {
+    background: rgba(14, 165, 233, 0.22) !important;
+}
+
+.price-history-item--clickable:focus-visible {
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.5);
+}
+
 .price-history-value {
     display: inline-flex;
     align-items: center;
@@ -586,6 +617,7 @@ body {
 
 .price-history-price {
     font-weight: 700;
+    text-align: right;
 }
 
 .price-history-time,
@@ -706,9 +738,9 @@ body {
 }
 
 .usd-idr-history-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 4rem 7.5rem 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
     border-radius: 0.45rem;
     padding: 0.4rem 0.45rem;
@@ -730,6 +762,7 @@ body {
 
 .usd-idr-history-price {
     font-weight: 700;
+    text-align: right;
 }
 
 .usd-idr-history-value {
@@ -751,6 +784,7 @@ body {
     font-weight: 700;
     line-height: 0.9rem;
     white-space: nowrap;
+    justify-self: end;
 }
 
 .usd-idr-history-pill-icon {

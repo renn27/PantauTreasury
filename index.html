@@ -7,8 +7,8 @@
     <title>Dashboard Emas</title>
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260617073932">
-    <link rel="stylesheet" href="style.css?v=20260617073932">
+    <link rel="stylesheet" href="tailwind.css?v=20260617080037">
+    <link rel="stylesheet" href="style.css?v=20260617080037">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -278,6 +278,36 @@
                     <!-- ROW 3: Ringkasan transaksi -->
                     <div class="stats-row min-h-0">
                         <div class="stats-grid grid grid-cols-4 gap-2">
+                            <!-- Info WebSocket (Promo & Limit) -->
+                            <div
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <div class="flex items-center">
+                                        <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0 text-blue-500"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
+                                            Promo & Limit
+                                        </p>
+                                    </div>
+                                    <span id="promoBadge" class="text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                        -
+                                    </span>
+                                </div>
+                                <div class="flex flex-col gap-0.5 mt-1">
+                                    <div class="flex justify-between items-center text-xxs">
+                                        <span class="text-gray-500">Limit Transaksi:</span>
+                                        <span id="limitBulanVal" class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-xxs">
+                                        <span class="text-gray-500">Harga Promo:</span>
+                                        <span id="promoPriceVal" class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Gram Beli 60jt -->
                             <div
                                 class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
@@ -314,36 +344,6 @@
                                     class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
                                     -
                                 </p>
-                            </div>
-
-                            <!-- Info WebSocket (Promo & Limit) -->
-                            <div
-                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
-                                <div class="flex items-center justify-between mb-1.5">
-                                    <div class="flex items-center">
-                                        <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0 text-blue-500"
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                        <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                            Promo & Limit
-                                        </p>
-                                    </div>
-                                    <span id="promoBadge" class="text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                                        -
-                                    </span>
-                                </div>
-                                <div class="flex flex-col gap-0.5 mt-1">
-                                    <div class="flex justify-between items-center text-xxs">
-                                        <span class="text-gray-500">Harga Promo:</span>
-                                        <span id="promoPriceVal" class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
-                                    </div>
-                                    <div class="flex justify-between items-center text-xxs">
-                                        <span class="text-gray-500">Limit Transaksi:</span>
-                                        <span id="limitBulanVal" class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- Cuan -->
@@ -776,7 +776,7 @@
     </div>
 
     <!-- Script -->
-    <script src="script.js?v=20260617073932" defer></script>
+    <script src="script.js?v=20260617080037" defer></script>
 </body>
 
 </html>

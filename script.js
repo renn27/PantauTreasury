@@ -408,21 +408,73 @@ function renderPriceHistoryDropdown(type) {
             const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
 
             return `
-            <div class="price-history-item">
+            <div class="price-history-item price-history-item--clickable" data-price="${value}" data-type="${type}" role="button" tabindex="0" title="Klik untuk simulasi ${type === 'buy' ? 'beli' : 'jual'} Rp ${value.toLocaleString('id-ID')}">
                 <span class="price-history-time font-numeric">${time}</span>
-                <span class="price-history-value">
-                    <span class="price-history-price font-numeric">${formatRupiah(value)}</span>
-                    <span class="usd-idr-history-pill ${directionClass} font-numeric">
-                        <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
-                        </svg>
-                        <span>${change === 0 ? formatRupiah(0) : formatRupiah(Math.abs(change))}</span>
-                    </span>
+                <span class="price-history-price font-numeric">${formatRupiah(value)}</span>
+                <span class="usd-idr-history-pill ${directionClass} font-numeric">
+                    <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+                    </svg>
+                    <span>${change === 0 ? formatRupiah(0) : formatRupiah(Math.abs(change))}</span>
                 </span>
             </div>
         `;
         })
         .join('');
+}
+
+/**
+ * Trigger simulasi langsung dari klik row harga di dropdown.
+ * @param {'buy'|'sell'} type
+ * @param {number} price
+ */
+function simulateFromHistory(type, price) {
+    if (!price || price <= 0) return;
+    if (type === 'buy') {
+        state.simulation.buyPrice = price;
+        state.simulation.sellPrice = null;
+        state.simulation.mode = 'buy';
+        state.simulation.gram = SIMULATION_BUY_BASE / price;
+        dom.markBuyBtn?.classList.add('simulation-active');
+        dom.markSellBtn?.classList.remove('simulation-active');
+    } else {
+        state.simulation.sellPrice = price;
+        state.simulation.buyPrice = null;
+        state.simulation.mode = 'sell';
+        state.simulation.gram = SIMULATION_SELL_BASE / price;
+        dom.markSellBtn?.classList.add('simulation-active');
+        dom.markBuyBtn?.classList.remove('simulation-active');
+    }
+    updateSimulation();
+    // Tutup dropdown setelah memilih
+    togglePriceHistoryDropdown(type, false);
+    // Scroll ke area simulasi
+    dom.simulationResults?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/**
+ * Pasang event delegation pada list container untuk klik row harga.
+ * Dipanggil setiap kali dropdown dibuka (innerHTML bisa berubah).
+ */
+function attachPriceHistoryClickDelegation(list, type) {
+    if (!list || list._historyClickBound) return;
+    list._historyClickBound = true;
+    list.addEventListener('click', (e) => {
+        const row = e.target.closest('.price-history-item--clickable');
+        if (!row) return;
+        const price = Number(row.dataset.price);
+        const rowType = row.dataset.type || type;
+        simulateFromHistory(rowType, price);
+    });
+    list.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const row = e.target.closest('.price-history-item--clickable');
+        if (!row) return;
+        e.preventDefault();
+        const price = Number(row.dataset.price);
+        const rowType = row.dataset.type || type;
+        simulateFromHistory(rowType, price);
+    });
 }
 
 function togglePriceHistoryDropdown(type, forceOpen) {
@@ -441,6 +493,9 @@ function togglePriceHistoryDropdown(type, forceOpen) {
         togglePriceHistoryDropdown(otherType, false);
         toggleUsdIdrHistoryDropdown(false);
         renderPriceHistoryDropdown(type);
+        // Pasang event delegation setelah render
+        const { list } = getPriceHistoryElements(type);
+        attachPriceHistoryClickDelegation(list, type);
     }
 }
 
@@ -637,14 +692,12 @@ function renderUsdIdrHistoryDropdown() {
             return `
             <div class="usd-idr-history-item">
                 <span class="usd-idr-history-time font-numeric">${item.time || '-'}</span>
-                <span class="usd-idr-history-value">
-                    <span class="usd-idr-history-price font-numeric">${formatUsdIdrRate(item.value)}</span>
-                    <span class="usd-idr-history-pill ${directionClass} font-numeric">
-                        <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
-                        </svg>
-                        <span>${pillValue}</span>
-                    </span>
+                <span class="usd-idr-history-price font-numeric">${formatUsdIdrRate(item.value)}</span>
+                <span class="usd-idr-history-pill ${directionClass} font-numeric">
+                    <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+                    </svg>
+                    <span>${pillValue}</span>
                 </span>
             </div>
         `;
@@ -832,10 +885,10 @@ function renderDerivedValues(values) {
 function renderPromoLimitInfo(promoStatus, limitBulan, promoPrice) {
     if (dom.promoBadge) {
         if (promoStatus === true || promoStatus === 'true') {
-            dom.promoBadge.textContent = 'AKTIF';
+            dom.promoBadge.textContent = 'ON';
             dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
         } else {
-            dom.promoBadge.textContent = 'MATI';
+            dom.promoBadge.textContent = 'OFF';
             dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
         }
     }
