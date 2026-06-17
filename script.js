@@ -156,11 +156,21 @@ const ids = [
     'usdIdrCard', 'usdIdrRate', 'usdIdrTime', 'usdIdrChange',
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
-    'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount'
+    'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
+    'promoBadge', 'promoPriceVal', 'limitBulanVal'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
 });
+
+// Load promo/limit from cache
+try {
+    const savedPromo = localStorage.getItem('promo_limit_cache');
+    if (savedPromo) {
+        const parsed = JSON.parse(savedPromo);
+        renderPromoLimitInfo(parsed.promo_status, parsed.limit_bulan, parsed.promo_price);
+    }
+} catch (e) { }
 
 // Render cached data immediately
 loadPriceHistory();
@@ -738,6 +748,9 @@ async function connectUsdIdrFeed() {
                 try {
                     const payload = JSON.parse(event.data);
                     if (payload.usd_idr_history) renderUsdIdrHistory(payload.usd_idr_history);
+                    if (payload.limit_bulan !== undefined || payload.promo_status !== undefined || payload.promo_price !== undefined) {
+                        renderPromoLimitInfo(payload.promo_status, payload.limit_bulan, payload.promo_price);
+                    }
                 } catch (e) { }
             };
 
@@ -813,6 +826,36 @@ function renderDerivedValues(values) {
         dom.cuan.textContent = formatRupiah(cuan);
         setProfitColorClass(dom.cuan, cuan >= 0);
     }
+}
+
+/* ================= SHARED: Render Promo & Limit Info ================= */
+function renderPromoLimitInfo(promoStatus, limitBulan, promoPrice) {
+    if (dom.promoBadge) {
+        if (promoStatus === true || promoStatus === 'true') {
+            dom.promoBadge.textContent = 'AKTIF';
+            dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+        } else {
+            dom.promoBadge.textContent = 'MATI';
+            dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+        }
+    }
+    
+    if (dom.limitBulanVal) {
+        dom.limitBulanVal.textContent = limitBulan !== undefined && limitBulan !== null ? limitBulan : '-';
+    }
+    
+    if (dom.promoPriceVal) {
+        dom.promoPriceVal.textContent = promoPrice ? formatRupiah(promoPrice) : '-';
+    }
+    
+    // Save to cache
+    try {
+        localStorage.setItem('promo_limit_cache', JSON.stringify({
+            promo_status: promoStatus,
+            limit_bulan: limitBulan,
+            promo_price: promoPrice
+        }));
+    } catch (e) {}
 }
 
 /* ================= SHARED: Manual Refresh ================= */
