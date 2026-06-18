@@ -507,7 +507,7 @@ body {
     position: absolute;
     top: calc(100% + 0.4rem);
     z-index: 28;
-    width: min(19rem, 88vw);
+    width: min(20rem, 88vw);
     max-height: 16rem;
     overflow: hidden;
     border: var(--border-light);
@@ -550,6 +550,7 @@ body {
 .price-history-list {
     max-height: 12.5rem;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0.25rem;
 }
 
@@ -699,7 +700,7 @@ body {
     top: calc(100% + 0.4rem);
     right: 0;
     z-index: 30;
-    width: min(17rem, 82vw);
+    width: min(20rem, 88vw);
     max-height: 16rem;
     overflow: hidden;
     border: var(--border-light);
@@ -734,6 +735,7 @@ body {
 .usd-idr-history-list {
     max-height: 12.5rem;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0.25rem;
 }
 

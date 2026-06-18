@@ -8,7 +8,7 @@ const REQUEST_HEADERS = {
 const FETCH_HEADERS = new Headers(REQUEST_HEADERS);
 
 /* ================= NAMED CONSTANTS ================= */
-const FETCH_TIMEOUT_MS = 3000;
+const FETCH_TIMEOUT_MS = 5000;
 const CACHE_LOCAL_TTL_MS = 30000;
 const SIMULATION_TTL_MS = 86400000; // 24 jam
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
@@ -148,7 +148,7 @@ const ids = [
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
     'refreshApiBtn', 'themeText', 'bigRefreshBtn',
     'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
-    'leftPanel', 'rightPanel', 'clearSimulationBtn', 'saveTradeBtn', 'simulationTimestamp',
+    'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
     'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
     'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
     'manualBuyPricePreview', 'manualSellPricePreview',
@@ -987,7 +987,11 @@ function showButtonFeedback(btn, type, duration) {
 function scheduleRetry(reason) {
     if (!state.isAutoFetching) return;
 
-    if (state.retryCount >= state.MAX_RETRY) {
+    // Tentukan batas maksimal retry berdasarkan alasan
+    const maxRetry = reason === 'stale-data' ? 12 : state.MAX_RETRY;
+    state.activeMaxRetry = maxRetry;
+
+    if (state.retryCount >= maxRetry) {
         debugLog(`Max retry reached (${reason}), stopping`);
         state.isRetrying = false;
         state.retryCount = 0;
@@ -997,8 +1001,18 @@ function scheduleRetry(reason) {
     }
 
     state.retryCount++;
-    const delay = Math.min(2000, 500 + (state.retryCount * 300));
-    debugLog(`Retry ${reason} ${state.retryCount}/${state.MAX_RETRY} in ${delay}ms`);
+
+    // Tentukan jeda retry berdasarkan alasan
+    let delay;
+    if (reason === 'stale-data') {
+        // Untuk data stale, gunakan jeda 1.5s - 2s agar tidak membombardir server secara berlebihan
+        delay = state.retryCount <= 5 ? 1500 : 2000;
+    } else {
+        // Untuk timeout/error, gunakan exponential backoff cepat
+        delay = Math.min(2000, 500 + (state.retryCount * 300));
+    }
+
+    debugLog(`Retry ${reason} ${state.retryCount}/${maxRetry} in ${delay}ms`);
 
     clearRetryTimeout();
     state.retryTimeoutId = setTimeout(() => {
@@ -1435,8 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Tombol Save
-    dom.saveTradeBtn?.addEventListener("click", saveTradingToDatabase)
+
 
     // Start timers
     startTimers();
@@ -1468,6 +1481,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('online', () => {
         state.usdIdrReconnectAttempt = 0;
         connectUsdIdrFeed();
+
+        // Segera ambil harga emas baru saat koneksi internet pulih kembali
+        state.isAutoFetching = true;
+        state.isRetrying = false;
+        state.retryCount = 0;
+        state.targetMinute = null;
+        clearRetryTimeout();
+        resetCountdown();
+        fetchHarga();
     });
 
 
@@ -1518,7 +1540,8 @@ async function fetchHarga() {
     // TAMPILKAN STATUS FETCHING di UI
     if (dom.lastUpdate) {
         if (state.isRetrying) {
-            dom.lastUpdate.textContent = `retry (${state.retryCount}/${state.MAX_RETRY})`;
+            const max = state.activeMaxRetry || state.MAX_RETRY;
+            dom.lastUpdate.textContent = `retry (${state.retryCount}/${max})`;
         } else {
             dom.lastUpdate.textContent = 'Fetching...';
         }
@@ -1550,7 +1573,8 @@ async function fetchHarga() {
             credentials: 'omit',
             cache: 'no-store',
             redirect: 'follow',
-            referrerPolicy: 'no-referrer'
+            referrerPolicy: 'no-referrer',
+            priority: 'high'
         });
 
         if (!res.ok) {
@@ -1573,18 +1597,24 @@ async function fetchHarga() {
             updated: data.updated_at
         };
 
-        // Periksa apakah data sudah sesuai dengan menit saat ini
+        // Ambil header tanggal server untuk sinkronisasi waktu agar terhindar dari ketidaksesuaian waktu lokal klien
+        const serverDateHeader = res.headers.get('Date');
+        let referenceTime = serverDateHeader ? new Date(serverDateHeader) : new Date();
+        if (Number.isNaN(referenceTime.getTime())) {
+            referenceTime = new Date();
+        }
+
+        // Periksa apakah data sudah sesuai dengan menit saat ini berdasarkan referensi waktu server
         const updated = new Date(result.updated);
-        const now = new Date();
-        const isCurrentMinute = isSameMinuteBucket(updated, now);
+        const isCurrentMinute = isSameMinuteBucket(updated, referenceTime);
 
         debugLog(`Data updated at: ${formatTimeId(updated)}`);
-        debugLog(`Current time: ${formatTimeId(now)}`);
+        debugLog(`Reference time: ${formatTimeId(referenceTime)}`);
         debugLog(`Is current minute: ${isCurrentMinute}`);
 
         // Jika ini adalah fetch pertama di detik 1
         if (state.isAutoFetching && !state.targetMinute) {
-            state.targetMinute = now.getMinutes();
+            state.targetMinute = referenceTime.getMinutes();
             debugLog(`Setting target minute: ${state.targetMinute}`);
         }
 
@@ -1607,7 +1637,7 @@ async function fetchHarga() {
         // Jika dalam mode auto-fetch dan data belum sesuai
         if (state.isAutoFetching && !isCurrentMinute) {
             if (!state.targetMinute) {
-                state.targetMinute = now.getMinutes();
+                state.targetMinute = referenceTime.getMinutes();
             }
             state.isRetrying = true;
             scheduleRetry('stale-data');
@@ -1900,9 +1930,7 @@ function updateSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.remove('hidden');
 
-    if (dom.saveTradeBtn) {
-        dom.saveTradeBtn.classList.remove("hidden")
-    }
+
 
     // Tampilkan tombol modal manual gram jika ada simulasi aktif
     if (dom.openManualGramModalBtn) {
@@ -2054,7 +2082,7 @@ function clearSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.add('hidden');
 
-    dom.saveTradeBtn?.classList.add("hidden")
+
 
     const timestampEl = dom.simulationTimestamp;
     if (timestampEl) {
@@ -2082,16 +2110,19 @@ function ensureSimStatusTemplate() {
 
     dom.simulationStatus.innerHTML = `
     <div class="simulation-status-summary text-left">
-        <div class="simulation-status-mode flex items-center">
-            <svg class="ui-icon w-4 h-4 animate-pulse mr-2 flex-shrink-0" data-slot="modeIcon"
-                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d=""></path>
-            </svg>
-            <p class="text-base font-semibold" data-slot="modeText"></p>
+        <div class="simulation-status-mode">
+            <div class="flex items-center">
+                <svg class="ui-icon w-5 h-5 animate-pulse mr-1.5 flex-shrink-0" data-slot="modeIcon"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d=""></path>
+                </svg>
+                <span class="simulation-status-price font-bold" data-slot="modeText"></span>
+            </div>
+            <p class="text-xs font-semibold font-numeric mt-1" style="padding-left: 26px;" data-slot="priceDiff"></p>
         </div>
         <div class="simulation-status-value text-right">
             <p class="text-xxs text-gray-500 dark:text-gray-400" data-slot="priceLabel"></p>
-            <p class="simulation-status-price font-bold font-numeric" data-slot="priceValue"></p>
+            <p class="simulation-status-price font-bold font-numeric mt-1" data-slot="priceValue"></p>
         </div>
     </div>`;
 
@@ -2102,7 +2133,8 @@ function ensureSimStatusTemplate() {
         modeIconPath: root.querySelector('[data-slot="modeIcon"] path'),
         modeText: root.querySelector('[data-slot="modeText"]'),
         priceLabel: root.querySelector('[data-slot="priceLabel"]'),
-        priceValue: root.querySelector('[data-slot="priceValue"]')
+        priceValue: root.querySelector('[data-slot="priceValue"]'),
+        priceDiff: root.querySelector('[data-slot="priceDiff"]')
     };
     return simStatusSlots;
 }
@@ -2136,11 +2168,30 @@ function updateSimulationStatus(mode) {
     // Update price label
     slots.priceLabel.textContent = isBuy ? 'Harga Beli' : 'Harga Jual';
 
-    // Update price value
+    // Update price value (fokus utama, ukuran besar dan berwarna hijau/merah)
     const priceEl = slots.priceValue;
     priceEl.textContent = formatRupiah(price);
     priceEl.classList.remove(...SIM_STATUS_COLOR_CLASSES);
     priceEl.classList.add(...(isBuy ? ['text-green-600', 'dark:text-green-400'] : ['text-red-600', 'dark:text-red-400']));
+
+    // Hitung selisih dengan harga saat ini (sekunder, diletakkan di sisi kiri)
+    const buy = Number(state.currentBuy);
+    const sell = Number(state.currentSell);
+    if (slots.priceDiff && buy > 0 && sell > 0) {
+        const diff = isBuy ? (buy - price) : (price - sell);
+        const formattedDiff = diff === 0 ? 'Rp 0' : (diff > 0 ? `+${formatRupiah(diff)}` : `-${formatRupiah(Math.abs(diff))}`);
+        
+        slots.priceDiff.textContent = `Selisih: ${formattedDiff}`;
+        slots.priceDiff.classList.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400', 'text-gray-500', 'dark:text-gray-400');
+        
+        if (diff > 0) {
+            slots.priceDiff.classList.add('text-green-600', 'dark:text-green-400');
+        } else if (diff < 0) {
+            slots.priceDiff.classList.add('text-red-600', 'dark:text-red-400');
+        } else {
+            slots.priceDiff.classList.add('text-gray-500', 'dark:text-gray-400');
+        }
+    }
 }
 
 /* ================= TIMERS ================= */
@@ -2186,67 +2237,7 @@ function tickTimers() {
     }
 }
 
-async function saveTradingToDatabase() {
-    if (!state.simulation.mode) {
-        // Jika tidak ada simulasi, kasih efek error cepat
-        showButtonFeedback(dom.saveTradeBtn, 'error', 800);
-        return;
-    }
 
-    // Simpan referensi tombol
-    const saveBtn = dom.saveTradeBtn;
-
-    // Ubah tombol menjadi "Menyimpan..." dengan spinner
-    showButtonFeedback(saveBtn, 'loading');
-
-    const mode = state.simulation.mode;
-    const gram = state.simulation.gram;
-    const price = mode === "buy" ? state.simulation.buyPrice : state.simulation.sellPrice;
-    const buy = state.currentBuy;
-    const sell = state.currentSell;
-
-    let currentGram, gramDiff, profitLoss;
-
-    if (mode === "buy") {
-        currentGram = SIMULATION_SELL_BASE / sell;
-        gramDiff = gram - currentGram;
-        profitLoss = gramDiff * sell;
-    } else {
-        currentGram = SIMULATION_BUY_BASE / buy;
-        gramDiff = currentGram - gram;
-        profitLoss = gramDiff * sell;
-    }
-
-    const payload = {
-        mode: mode.toUpperCase(),
-        waktu: new Date().toLocaleString("id-ID", {
-            timeZone: "Asia/Jakarta"
-        }),
-        harga: Math.round(price),
-        harga_buy_realtime: Math.round(buy),
-        harga_sell_realtime: Math.round(sell),
-        gram: floor4(gram),
-        selisih_gram: floor4(gramDiff),
-        profit_loss: Math.round(profitLoss)
-    };
-
-    try {
-        const response = await fetch("https://script.google.com/macros/s/AKfycbxfldyX2pupfiwgGekeMg_HrARNgWI802WXspZLQmSauxYHJ-VBUfSNTYNpw6lmduac4A/exec", {
-            method: "POST",
-            body: JSON.stringify(payload),
-            mode: 'no-cors'
-        });
-
-        // SUKSES
-        showButtonFeedback(saveBtn, 'success', 1500);
-
-    } catch (err) {
-        console.error("Gagal simpan", err);
-
-        // GAGAL
-        showButtonFeedback(saveBtn, 'error', 1500);
-    }
-}
 
 /* ================= INITIAL SETUP ================= */
 try {
