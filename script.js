@@ -778,6 +778,12 @@ function closeUsdIdrFeed() {
         clearTimeout(state.usdIdrPollTimeoutId);
         state.usdIdrPollTimeoutId = null;
     }
+    if (state.usdIdrWs) {
+        state.usdIdrWs.onclose = null;
+        state.usdIdrWs.onerror = null;
+        state.usdIdrWs.close();
+        state.usdIdrWs = null;
+    }
 }
 
 async function connectUsdIdrFeed() {
@@ -1212,8 +1218,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initialIsDark = document.documentElement.classList.contains('dark');
     updateThemeButtonText(initialIsDark);
-    if (dom.tvIframe && !dom.tvIframe.getAttribute('src')) {
-        syncTradingViewTheme(initialIsDark);
+    
+    // Defer TradingView iframe initialization to window load to prevent blocking initial paints and avoid double loading
+    const initTradingViewIframe = () => {
+        if (dom.tvIframe && !dom.tvIframe.getAttribute('src')) {
+            syncTradingViewTheme(initialIsDark);
+        }
+    };
+
+    if (document.readyState === 'complete') {
+        initTradingViewIframe();
+    } else {
+        window.addEventListener('load', initTradingViewIframe);
     }
 
     // Bind events

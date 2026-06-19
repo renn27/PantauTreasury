@@ -5,6 +5,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Emas</title>
+    <!-- Preconnect Domains for Speed -->
+    <link rel="preconnect" href="https://api.treasury.id">
+    <link rel="dns-prefetch" href="https://api.treasury.id">
+
     <!-- PWA & Mobile Web App Meta -->
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,8 +17,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260619093224">
-    <link rel="stylesheet" href="style.css?v=20260619093224">
+    <link rel="stylesheet" href="tailwind.css?v=20260619170100">
+    <link rel="stylesheet" href="style.css?v=20260619170100">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,7 +63,7 @@
                         <!-- TIME.IS iframe -->
                         <div class="header-time-col">
                             <div class="glass-card rounded-lg overflow-hidden relative h-full card-hover card-elevated">
-                                <iframe id="timeIframe" src="https://time.is/Jakarta"
+                                <iframe id="timeIframe" src="https://time.is/Jakarta" loading="lazy"
                                     class="absolute top-[-180%] left-1/2 w-[145%] h-[190%] -translate-x-1/2 translate-y-[50%]"
                                     title="Waktu Jakarta"></iframe>
                             </div>
@@ -661,18 +665,10 @@
                         </div>
                         <div
                             class="chart-container flex-1 min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-                            <iframe id="tvIframe" class="w-full h-full"
+                            <iframe id="tvIframe" class="w-full h-full" loading="lazy"
                                 data-src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme={theme}&style=1&timezone=Asia%2FJakarta&hide_side_toolbar=true&withdateranges=false&allow_symbol_change=false&locale=id"
                                 title="XAU/USD Trading Chart" scrolling="no" frameborder="0" allowfullscreen>
                             </iframe>
-                            <script>
-                                (function () {
-                                    var iframe = document.getElementById('tvIframe');
-                                    if (!iframe) return;
-                                    var theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-                                    iframe.src = iframe.dataset.src.replace('{theme}', theme);
-                                })();
-                            </script>
                         </div>
                     </div>
                 </div>
@@ -683,7 +679,7 @@
         <div class="status-footer">
             <div class="status-footer-brand">
                 <span class="status-footer-title">Pantau Treasury</span>
-                <span class="status-footer-version">v26.06.19</span>
+                <span class="status-footer-version">v26.06.19.1</span>
             </div>
         </div>
     </div>
@@ -758,7 +754,7 @@
     </div>
 
     <!-- Script -->
-    <script src="script.js?v=20260619093224" defer></script>
+    <script src="script.js?v=20260619170100" defer></script>
 </body>
 
 </html>

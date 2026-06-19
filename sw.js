@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v1';
+const CACHE_NAME = 'pantau-treasury-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   './script.js',
   './tailwind.css',
   './icon.png',
+  './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
 ];
 
@@ -37,6 +38,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event - Dynamic caching strategy
 self.addEventListener('fetch', (event) => {
+  // Only process GET requests to prevent TypeError on POST/write requests (e.g. rate POST)
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const requestUrl = new URL(event.request.url);
 
   // Network-First for API calls (e.g., Treasury.id) to ensure real-time data when online
@@ -61,14 +67,17 @@ self.addEventListener('fetch', (event) => {
 
   // Cache-First for static assets to ensure instant app loads
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
 
       return fetch(event.request).then((response) => {
-        // Do not cache non-successful responses, opaque responses, or POST requests
-        if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
+        // Cache successful basic responses, and cors responses from fonts.gstatic.com for full offline fonts support
+        const isCachableType = response.type === 'basic' || 
+          (response.type === 'cors' && requestUrl.hostname.includes('fonts.gstatic.com'));
+
+        if (!response || response.status !== 200 || !isCachableType) {
           return response;
         }
 
@@ -82,3 +91,5 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+
