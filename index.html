@@ -5,10 +5,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Emas</title>
+    <!-- PWA & Mobile Web App Meta -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Pantau Treasury">
+    <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260618234816">
-    <link rel="stylesheet" href="style.css?v=20260618234816">
+    <link rel="stylesheet" href="tailwind.css?v=20260619030224">
+    <link rel="stylesheet" href="style.css?v=20260619030224">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -598,6 +604,14 @@
                                 </svg>
                                 <span>Full</span>
                             </button>
+                            <button id="installPwaBtn" class="settings-menu-item group hidden">
+                                <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                <span>Instal</span>
+                            </button>
                             <a href="https://www.google.com/finance/quote/USD-IDR" target="_blank"
                                 rel="noopener noreferrer" class="settings-menu-item group">
                                 <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
@@ -668,30 +682,8 @@
         <!-- Footer Status Bar -->
         <div class="status-footer">
             <div class="status-footer-brand">
-                <span class="status-footer-live">
-                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M9 12l2 2 4-5m6 3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </span>
-                <span class="status-footer-title">Dashboard Emas</span>
+                <span class="status-footer-title">Pantau Treasury</span>
                 <span class="status-footer-version">v26.06.19</span>
-            </div>
-            <div class="status-footer-sources">
-                <span class="status-footer-source">
-                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M4 7c0-2 3.58-3 8-3s8 1 8 3-3.58 3-8 3-8-1-8-3zm0 0v5c0 2 3.58 3 8 3s8-1 8-3V7M4 12v5c0 2 3.58 3 8 3s8-1 8-3v-5">
-                        </path>
-                    </svg>
-                    Treasury.id API
-                </span>
-                <span class="status-footer-source">
-                    <svg class="ui-icon w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l5-5 4 4 7-8m0 0h-5m5 0v5"></path>
-                    </svg>
-                    TradingView
-                </span>
             </div>
         </div>
     </div>
@@ -766,7 +758,7 @@
     </div>
 
     <!-- Script -->
-    <script src="script.js?v=20260618234816" defer></script>
+    <script src="script.js?v=20260619030224" defer></script>
 </body>
 
 </html>

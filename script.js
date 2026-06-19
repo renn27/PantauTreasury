@@ -149,7 +149,7 @@ const ids = [
     'refreshApiBtn', 'themeText', 'bigRefreshBtn',
     'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
     'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
-    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'timeIframe', 'tvIframe',
+    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'installPwaBtn', 'timeIframe', 'tvIframe',
     'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
     'manualBuyPricePreview', 'manualSellPricePreview',
     'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent',
@@ -273,6 +273,20 @@ function renderPriceValue(el, current, previous) {
     void el.offsetWidth;
     el.classList.add(rollClass);
     card?.classList.add(cardClass);
+}
+
+function getPreviousDistinctPrice(type, currentPrice) {
+    const history = state.priceHistory || [];
+    const valueKey = type === 'buy' ? 'buy' : 'sell';
+    
+    // Scan backward to find the first price that is different from currentPrice
+    for (let i = history.length - 1; i >= 0; i--) {
+        const val = Number(history[i][valueKey]);
+        if (Number.isFinite(val) && val !== currentPrice) {
+            return val;
+        }
+    }
+    return null;
 }
 
 function renderPriceChangeIndicator(el, current, previous) {
@@ -1040,8 +1054,10 @@ function renderCachedData() {
     state.lastRenderedSell = sell;
     state.currentBuy = buy;
     state.currentSell = sell;
-    renderPriceChangeIndicator(dom.hargaBeliChange, buy, null);
-    renderPriceChangeIndicator(dom.hargaJualChange, sell, null);
+    const displayPrevBuy = getPreviousDistinctPrice('buy', buy);
+    const displayPrevSell = getPreviousDistinctPrice('sell', sell);
+    renderPriceChangeIndicator(dom.hargaBeliChange, buy, displayPrevBuy);
+    renderPriceChangeIndicator(dom.hargaJualChange, sell, displayPrevSell);
 
     // Update timestamp
     if (dom.lastUpdate) {
@@ -1449,6 +1465,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    dom.installPwaBtn?.addEventListener('click', async () => {
+        console.log('Install PWA button clicked. deferredPrompt:', deferredPrompt);
+        if (!deferredPrompt) {
+            console.warn('Install PWA clicked but deferredPrompt is null or unavailable.');
+            alert('Aplikasi tidak dapat diinstal secara langsung dari tombol ini. Pastikan Anda membuka situs menggunakan HTTPS atau localhost, menggunakan browser yang didukung (Chrome/Edge/Opera), dan tidak berada di tab Private/Incognito. Jika sudah memenuhi syarat, Anda juga bisa menginstal langsung dari menu browser (titik tiga -> Instal Aplikasi).');
+            return;
+        }
+        try {
+            dom.installPwaBtn.disabled = true;
+            console.log('Calling deferredPrompt.prompt()...');
+            await deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`PWA install prompt completed. User choice outcome: ${outcome}`);
+            deferredPrompt = null;
+            dom.installPwaBtn.classList.add('hidden');
+        } catch (error) {
+            console.error('Error during PWA installation prompt:', error);
+            alert('Gagal membuka menu instalasi: ' + error.message);
+        } finally {
+            dom.installPwaBtn.disabled = false;
+        }
+    });
+
 
 
     // Start timers
@@ -1720,8 +1759,10 @@ function updateUI(data) {
         state.lastRenderedSell = sell;
     }
 
-    renderPriceChangeIndicator(dom.hargaBeliChange, buy, previousBuy);
-    renderPriceChangeIndicator(dom.hargaJualChange, sell, previousSell);
+    const displayPrevBuy = getPreviousDistinctPrice('buy', buy);
+    const displayPrevSell = getPreviousDistinctPrice('sell', sell);
+    renderPriceChangeIndicator(dom.hargaBeliChange, buy, displayPrevBuy);
+    renderPriceChangeIndicator(dom.hargaJualChange, sell, displayPrevSell);
 
     // Timestamp
     if (dom.lastUpdate) {
@@ -2181,7 +2222,7 @@ function updateSimulationStatus(mode) {
         const diff = isBuy ? (buy - price) : (price - sell);
         const formattedDiff = diff === 0 ? 'Rp 0' : (diff > 0 ? `+${formatRupiah(diff)}` : `-${formatRupiah(Math.abs(diff))}`);
         
-        slots.priceDiff.textContent = `Selisih: ${formattedDiff}`;
+        slots.priceDiff.textContent = `(${formattedDiff})`;
         slots.priceDiff.classList.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400', 'text-gray-500', 'dark:text-gray-400');
         
         if (diff > 0) {
@@ -2246,3 +2287,30 @@ try {
         document.documentElement.classList.add('dark');
     }
 } catch (e) { }
+
+/* ================= PWA INSTALLATION & SERVICE WORKER ================= */
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (dom.installPwaBtn) {
+        dom.installPwaBtn.classList.remove('hidden');
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    debugLog('PWA was installed successfully!');
+    if (dom.installPwaBtn) {
+        dom.installPwaBtn.classList.add('hidden');
+    }
+    deferredPrompt = null;
+});
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then((reg) => debugLog('ServiceWorker registered with scope:', reg.scope))
+            .catch((err) => console.error('ServiceWorker registration failed:', err));
+    });
+}
