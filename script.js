@@ -21,6 +21,7 @@ const PRICE_HISTORY_LIMIT = 30;
 const USD_IDR_WORKER_URL = 'https://tight-morning-90aa.ambaneguriha.workers.dev'; // Cloudflare Worker proxy untuk ticket embegeh.my.id
 const USD_IDR_API_URL = 'https://open.er-api.com/v6/latest/USD'; // Fallback jika Worker belum di-set
 const USD_IDR_WS_URL = 'wss://embegeh.my.id/ws';
+const USD_IDR_WS_FALLBACK_URL = 'wss://menujukurban.my.id/ws'; // Fallback jika embegeh.my.id down/rate-limited
 const USD_IDR_POLL_MS = 5 * 60 * 1000; // poll setiap 5 menit (mode fallback)
 const DEBUG = false;
 
@@ -786,6 +787,33 @@ function closeUsdIdrFeed() {
     }
 }
 
+function setupUsdIdrWsHandlers(ws) {
+    ws.onopen = () => {
+        state.usdIdrReconnectAttempt = 0;
+        if (!state.usdIdrLastPrice) setUsdIdrStatus('Live');
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const payload = JSON.parse(event.data);
+            if (payload.usd_idr_history) renderUsdIdrHistory(payload.usd_idr_history);
+            if (payload.limit_bulan !== undefined || payload.promo_status !== undefined || payload.promo_price !== undefined) {
+                renderPromoLimitInfo(payload.promo_status, payload.limit_bulan, payload.promo_price);
+            }
+        } catch (e) { }
+    };
+
+    ws.onerror = () => {
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+
+    ws.onclose = () => {
+        if (state.usdIdrWs === ws) state.usdIdrWs = null;
+        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting...' : 'Tidak tersedia');
+        state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 15000);
+    };
+}
+
 async function connectUsdIdrFeed() {
     if (!dom.usdIdrRate) return;
     if (document.hidden || navigator.onLine === false) {
@@ -793,59 +821,46 @@ async function connectUsdIdrFeed() {
         return;
     }
 
+    // Tutup koneksi lama jika ada
+    if (state.usdIdrWs) {
+        state.usdIdrWs.onclose = null;
+        state.usdIdrWs.close();
+        state.usdIdrWs = null;
+    }
+
     // === MODE 1: embegeh WebSocket via Cloudflare Worker proxy ===
     if (USD_IDR_WORKER_URL) {
         try {
+            debugLog('Mencoba koneksi WS embegeh...');
             const ticketRes = await fetch(USD_IDR_WORKER_URL);
             if (!ticketRes.ok) throw new Error(`Ticket HTTP ${ticketRes.status}`);
             const ticketData = await ticketRes.json();
             const ticket = ticketData.ticket;
             if (!ticket) throw new Error('Tiket tidak valid');
 
-            // Tutup koneksi lama jika ada
-            if (state.usdIdrWs) {
-                state.usdIdrWs.onclose = null;
-                state.usdIdrWs.close();
-                state.usdIdrWs = null;
-            }
-
             const ws = new WebSocket(`${USD_IDR_WS_URL}?ticket=${ticket}`);
             state.usdIdrWs = ws;
-
-            ws.onopen = () => {
-                state.usdIdrReconnectAttempt = 0;
-                if (!state.usdIdrLastPrice) setUsdIdrStatus('Live');
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const payload = JSON.parse(event.data);
-                    if (payload.usd_idr_history) renderUsdIdrHistory(payload.usd_idr_history);
-                    if (payload.limit_bulan !== undefined || payload.promo_status !== undefined || payload.promo_price !== undefined) {
-                        renderPromoLimitInfo(payload.promo_status, payload.limit_bulan, payload.promo_price);
-                    }
-                } catch (e) { }
-            };
-
-            ws.onerror = () => {
-                if (ws.readyState === WebSocket.OPEN) ws.close();
-            };
-
-            ws.onclose = () => {
-                if (state.usdIdrWs === ws) state.usdIdrWs = null;
-                setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting...' : 'Tidak tersedia');
-                // Reconnect: ambil tiket baru lagi
-                state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 15000);
-            };
-
+            setupUsdIdrWsHandlers(ws);
             return; // Selesai - koneksi WS berhasil dibuat
         } catch (e) {
-            debugLog('embegeh WS error, fallback ke polling:', e);
-            // Lanjut ke mode fallback di bawah
+            debugLog('embegeh WS error, mencoba fallback ke menujukurban:', e);
         }
     }
 
-    // === MODE 2: Fallback - HTTP Polling open.er-api.com ===
+    // === MODE 2: menujukurban WebSocket (direct wss tanpa ticket) ===
+    if (USD_IDR_WS_FALLBACK_URL) {
+        try {
+            debugLog('Mencoba koneksi WS menujukurban...');
+            const ws = new WebSocket(USD_IDR_WS_FALLBACK_URL);
+            state.usdIdrWs = ws;
+            setupUsdIdrWsHandlers(ws);
+            return; // Selesai - koneksi WS berhasil dibuat
+        } catch (e) {
+            debugLog('menujukurban WS error, fallback ke polling:', e);
+        }
+    }
+
+    // === MODE 3: Fallback - HTTP Polling open.er-api.com ===
     try {
         const res = await fetch(USD_IDR_API_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
