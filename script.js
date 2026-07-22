@@ -84,7 +84,8 @@ let state = {
         buyPrice: null,
         sellPrice: null,
         mode: null,
-        gram: null
+        gram: null,
+        profitHistory: []
     },
     chartWidth: '1/4',
     targetMinute: null,
@@ -227,11 +228,13 @@ function clearRetryTimeout() {
 
 function getSimulationStorageKey() {
     const sim = state.simulation || {};
+    const historyLen = Array.isArray(sim.profitHistory) ? sim.profitHistory.length : 0;
     return [
         sim.mode || '',
         sim.buyPrice || '',
         sim.sellPrice || '',
-        sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : ''
+        sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : '',
+        historyLen
     ].join('|');
 }
 
@@ -295,7 +298,7 @@ function renderPriceChangeIndicator(el, current, previous) {
 
     el.classList.remove('price-change-up', 'price-change-down', 'price-change-neutral');
 
-    if (!Number.isFinite(previous) || previous <= 0) {
+    if (!Number.isFinite(previous) || !Number.isFinite(current)) {
         el.textContent = '-';
         el.setAttribute('aria-label', 'Belum ada perubahan harga');
         el.classList.add('price-change-neutral');
@@ -335,6 +338,35 @@ function getPriceHistoryStorageKey() {
     return 'treasury_price_history';
 }
 
+function dedupePriceHistory(history) {
+    if (!Array.isArray(history)) return [];
+
+    const seenMinutes = new Map();
+
+    for (const item of history) {
+        const buy = Number(item.buy);
+        const sell = Number(item.sell);
+        const rawTimeStr = item.updated;
+        if (!Number.isFinite(buy) || !Number.isFinite(sell) || !rawTimeStr) continue;
+
+        const dateObj = new Date(typeof rawTimeStr === 'string' && rawTimeStr.includes(' ') ? rawTimeStr.replace(' ', 'T') : rawTimeStr);
+        if (Number.isNaN(dateObj.getTime())) continue;
+
+        // Key keunikan berdasarkan menit timestamp (1 menit = 60.000 ms)
+        const minuteKey = Math.floor(dateObj.getTime() / 60000);
+
+        seenMinutes.set(minuteKey, {
+            buy,
+            sell,
+            updated: dateObj.toISOString()
+        });
+    }
+
+    const result = Array.from(seenMinutes.values());
+    result.sort((a, b) => new Date(a.updated).getTime() - new Date(b.updated).getTime());
+    return result.slice(-PRICE_HISTORY_LIMIT);
+}
+
 function loadPriceHistory() {
     try {
         const saved = localStorage.getItem(getPriceHistoryStorageKey());
@@ -342,14 +374,8 @@ function loadPriceHistory() {
         const parsed = JSON.parse(saved);
         if (!Array.isArray(parsed)) return;
 
-        state.priceHistory = parsed
-            .map(item => ({
-                buy: Number(item.buy),
-                sell: Number(item.sell),
-                updated: item.updated
-            }))
-            .filter(item => Number.isFinite(item.buy) && Number.isFinite(item.sell) && item.updated)
-            .slice(-PRICE_HISTORY_LIMIT);
+        state.priceHistory = dedupePriceHistory(parsed);
+        savePriceHistory();
     } catch (e) { }
 }
 
@@ -367,16 +393,62 @@ function addPriceHistoryEntry(data) {
     const sell = Number(data.sell);
     if (!Number.isFinite(buy) || !Number.isFinite(sell) || !data.updated) return;
 
-    const latest = state.priceHistory[state.priceHistory.length - 1];
-    if (latest && latest.updated === data.updated && latest.buy === buy && latest.sell === sell) {
+    const dateParsed = new Date(typeof data.updated === 'string' && data.updated.includes(' ') ? data.updated.replace(' ', 'T') : data.updated);
+    if (Number.isNaN(dateParsed.getTime())) return;
+
+    const currentHistory = state.priceHistory || [];
+    const newHistory = dedupePriceHistory([...currentHistory, {
+        buy,
+        sell,
+        updated: dateParsed.toISOString()
+    }]);
+
+    if (JSON.stringify(newHistory) === JSON.stringify(currentHistory)) {
         return;
     }
 
-    state.priceHistory.push({ buy, sell, updated: data.updated });
-    state.priceHistory = state.priceHistory.slice(-PRICE_HISTORY_LIMIT);
+    state.priceHistory = newHistory;
     savePriceHistory();
     renderPriceHistoryDropdown('buy');
     renderPriceHistoryDropdown('sell');
+}
+
+function syncPriceHistoryFromWs(wsHistory) {
+    if (!Array.isArray(wsHistory) || wsHistory.length === 0) return;
+
+    try {
+        const currentHistory = state.priceHistory || [];
+        const candidateList = [...currentHistory];
+
+        for (const item of wsHistory) {
+            const buy = Number(item.buying_rate_raw);
+            const sell = Number(item.selling_rate_raw);
+            const rawTimeStr = item.created_at;
+
+            if (!Number.isFinite(buy) || !Number.isFinite(sell) || !rawTimeStr) continue;
+
+            const dateParsed = new Date(rawTimeStr.includes(' ') ? rawTimeStr.replace(' ', 'T') : rawTimeStr);
+            if (Number.isNaN(dateParsed.getTime())) continue;
+
+            candidateList.push({
+                buy,
+                sell,
+                updated: dateParsed.toISOString()
+            });
+        }
+
+        const cleanHistory = dedupePriceHistory(candidateList);
+
+        if (JSON.stringify(cleanHistory) !== JSON.stringify(currentHistory)) {
+            state.priceHistory = cleanHistory;
+            savePriceHistory();
+            renderPriceHistoryDropdown('buy');
+            renderPriceHistoryDropdown('sell');
+            debugLog(`[WS Sync] Menyinkronkan data riwayat harga unik dari WebSocket.`);
+        }
+    } catch (e) {
+        debugLog('[WS Sync] Gagal menyelaraskan riwayat harga:', e);
+    }
 }
 
 function getPriceHistoryElements(type) {
@@ -445,6 +517,7 @@ function renderPriceHistoryDropdown(type) {
  */
 function simulateFromHistory(type, price) {
     if (!price || price <= 0) return;
+    resetSimulationProfitHistory();
     if (type === 'buy') {
         state.simulation.buyPrice = price;
         state.simulation.sellPrice = null;
@@ -799,6 +872,9 @@ function setupUsdIdrWsHandlers(ws) {
             if (payload.usd_idr_history) renderUsdIdrHistory(payload.usd_idr_history);
             if (payload.limit_bulan !== undefined || payload.promo_status !== undefined || payload.promo_price !== undefined) {
                 renderPromoLimitInfo(payload.promo_status, payload.limit_bulan, payload.promo_price);
+            }
+            if (Array.isArray(payload.history) && payload.history.length > 0) {
+                syncPriceHistoryFromWs(payload.history);
             }
         } catch (e) { }
     };
@@ -1298,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? state.currentBuy
                 : fastParse(dom.hargaBeli.textContent);
             if (price > 0) {
+                resetSimulationProfitHistory();
                 state.simulation.buyPrice = price;
                 state.simulation.sellPrice = null;
                 state.simulation.mode = 'buy';
@@ -1317,6 +1394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? state.currentSell
                 : fastParse(dom.hargaJual.textContent);
             if (price > 0) {
+                resetSimulationProfitHistory();
                 state.simulation.sellPrice = price;
                 state.simulation.buyPrice = null;
                 state.simulation.mode = 'sell';
@@ -1463,6 +1541,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleUsdIdrHistoryDropdown(false);
         togglePriceHistoryDropdown('buy', false);
         togglePriceHistoryDropdown('sell', false);
+        toggleProfitHistoryDropdown('buy', false);
+        toggleProfitHistoryDropdown('sell', false);
     });
 
     // Dark mode button
@@ -1834,9 +1914,27 @@ function buildSimulationTemplate(mode) {
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Selisih Gram</p>
                 <p data-slot="gramDiff" class="text-base font-bold font-numeric">-</p>
             </div>
-            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg" data-metric="profitLoss">
-                <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Profit / Loss</p>
+            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg relative cursor-pointer group hover:opacity-95 transition-all duration-200" 
+                 data-metric="profitLoss" 
+                 role="button" 
+                 tabindex="0" 
+                 aria-expanded="false" 
+                 title="Klik untuk melihat riwayat pergerakan Profit / Loss simulasi ini">
+                <div class="flex items-end justify-between mb-1">
+                    <p class="text-xxs text-gray-600 dark:text-gray-400 leading-tight">Profit / Loss</p>
+                    <span data-slot="profitChangePill" class="price-change-indicator price-change-neutral font-numeric !static !m-0">-</span>
+                </div>
                 <p data-slot="profitLoss" class="text-lg font-bold font-numeric">-</p>
+
+                <div data-slot="profitHistoryDropdown" class="price-history-dropdown price-history-dropdown-right price-history-dropdown-up hidden">
+                    <div class="price-history-heading">
+                        <span class="font-semibold text-gray-800 dark:text-gray-200">Riwayat Profit / Loss</span>
+                        <span data-slot="profitHistoryCount" class="text-xxs font-normal text-gray-500 dark:text-gray-400">0 data</span>
+                    </div>
+                    <div data-slot="profitHistoryList" class="price-history-list">
+                        <p class="price-history-empty">Menunggu pergerakan harga...</p>
+                    </div>
+                </div>
             </div>
         </div>`;
 }
@@ -1874,12 +1972,26 @@ function getSimulationSlotRefs(mode, node) {
         currentGramEl: node.querySelector('[data-slot="currentGram"]'),
         gramDiffEl: node.querySelector('[data-slot="gramDiff"]'),
         profitLossEl: node.querySelector('[data-slot="profitLoss"]'),
+        profitChangePill: node.querySelector('[data-slot="profitChangePill"]'),
+        profitHistoryCount: node.querySelector('[data-slot="profitHistoryCount"]'),
+        profitHistoryDropdown: node.querySelector('[data-slot="profitHistoryDropdown"]'),
+        profitHistoryList: node.querySelector('[data-slot="profitHistoryList"]'),
         gramDiffTile: node.querySelector('[data-metric="gramDiff"]'),
         profitLossTile: node.querySelector('[data-metric="profitLoss"]')
     };
+
+    if (slots.profitLossTile && !slots.profitLossTile._clickBound) {
+        slots.profitLossTile._clickBound = true;
+        slots.profitLossTile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleProfitHistoryDropdown(mode);
+        });
+    }
+
     state.simulationSlots[mode] = slots;
     return slots;
 }
+
 
 function setSimulationMetricTone(tile, valueEl, value, successThreshold) {
     const isNegative = value < 0;
@@ -1967,6 +2079,7 @@ function applyManualGramSimulation(mode) {
 
     setManualGramError('');
     updateManualPricePreview();
+    resetSimulationProfitHistory();
 
     if (mode === 'buy') {
         state.simulation.buyPrice = SIMULATION_BUY_BASE / gram;
@@ -1988,6 +2101,178 @@ function applyManualGramSimulation(mode) {
     return true;
 }
 
+function resetSimulationProfitHistory() {
+    if (!state.simulation) return;
+    state.simulation.profitHistory = [];
+    toggleProfitHistoryDropdown('buy', false);
+    toggleProfitHistoryDropdown('sell', false);
+
+    ['buy', 'sell'].forEach(mode => {
+        const node = state.simulationNodes[mode] || document.getElementById(mode === 'buy' ? 'buySimulation' : 'sellSimulation');
+        if (node) {
+            const slots = getSimulationSlotRefs(mode, node);
+            if (slots.profitChangePill) {
+                renderPriceChangeIndicator(slots.profitChangePill, null, null);
+            }
+            if (slots.profitHistoryCount) {
+                slots.profitHistoryCount.textContent = '0 data';
+            }
+        }
+    });
+
+    saveSimulationToStorage();
+}
+
+function dedupeProfitHistory(history) {
+    if (!Array.isArray(history)) return [];
+
+    const seenMinutes = new Map();
+
+    for (const item of history) {
+        const profitLoss = Number(item.profitLoss);
+        const gramDiff = Number(item.gramDiff);
+        const timestamp = Number(item.timestamp) || 0;
+        const dateObj = new Date(timestamp);
+
+        if (!Number.isFinite(profitLoss) || Number.isNaN(dateObj.getTime()) || timestamp <= 0) continue;
+
+        // Key keunikan per menit timestamp (1 menit = 60.000 ms)
+        const minuteKey = Math.floor(dateObj.getTime() / 60000);
+
+        seenMinutes.set(minuteKey, {
+            profitLoss: Math.round(profitLoss),
+            gramDiff: floor4(gramDiff),
+            time: item.time || formatTimeIdHms(dateObj),
+            timestamp: dateObj.getTime()
+        });
+    }
+
+    const result = Array.from(seenMinutes.values());
+    result.sort((a, b) => a.timestamp - b.timestamp);
+    return result.slice(-30);
+}
+
+function addSimulationProfitHistoryEntry(mode, profitLoss, gramDiff) {
+    if (!state.simulation) return;
+    if (!Array.isArray(state.simulation.profitHistory)) {
+        state.simulation.profitHistory = [];
+    }
+
+    const history = state.simulation.profitHistory;
+    const now = Date.now();
+    const timeStr = formatTimeIdHms(new Date(now));
+
+    const newHistory = dedupeProfitHistory([...history, {
+        profitLoss: Math.round(profitLoss),
+        gramDiff: floor4(gramDiff),
+        time: timeStr,
+        timestamp: now
+    }]);
+
+    if (JSON.stringify(newHistory) === JSON.stringify(history)) {
+        renderProfitHistoryDropdown(mode);
+        return;
+    }
+
+    state.simulation.profitHistory = newHistory;
+    saveSimulationToStorage();
+    renderProfitHistoryDropdown(mode);
+}
+
+function toggleProfitHistoryDropdown(mode, forceOpen) {
+    const node = state.simulationNodes[mode] || document.getElementById(mode === 'buy' ? 'buySimulation' : 'sellSimulation');
+    if (!node) return;
+
+    const slots = getSimulationSlotRefs(mode, node);
+    const dropdown = slots.profitHistoryDropdown;
+    const tile = slots.profitLossTile;
+    if (!dropdown || !tile) return;
+
+    const isHidden = dropdown.classList.contains('hidden');
+    const nextState = typeof forceOpen === 'boolean' ? forceOpen : isHidden;
+
+    if (nextState) {
+        dropdown.classList.remove('hidden');
+        tile.setAttribute('aria-expanded', 'true');
+        renderProfitHistoryDropdown(mode);
+    } else {
+        dropdown.classList.add('hidden');
+        tile.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function renderProfitHistoryDropdown(mode) {
+    const node = state.simulationNodes[mode] || document.getElementById(mode === 'buy' ? 'buySimulation' : 'sellSimulation');
+    if (!node) return;
+
+    const slots = getSimulationSlotRefs(mode, node);
+    const list = slots.profitHistoryList;
+    const count = slots.profitHistoryCount;
+    const pill = slots.profitChangePill;
+    if (!list) return;
+
+    const history = state.simulation.profitHistory || [];
+    if (count) count.textContent = `${history.length} data`;
+
+    if (pill) {
+        if (history.length < 2) {
+            renderPriceChangeIndicator(pill, null, null);
+        } else {
+            const latest = history[history.length - 1];
+            const prev = history[history.length - 2];
+            renderPriceChangeIndicator(pill, Number(latest.profitLoss), Number(prev.profitLoss));
+        }
+    }
+
+    if (history.length === 0) {
+        list.innerHTML = '<p class="price-history-empty">Menunggu pergerakan harga...</p>';
+        return;
+    }
+
+    const valueKey = 'profitLoss';
+    list.innerHTML = history
+        .slice()
+        .reverse()
+        .map((item, index, reversed) => {
+            const nextOlder = reversed[index + 1];
+            const value = Number(item[valueKey]);
+            const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
+
+            const isPositiveValue = value >= 0;
+            const valueColorClass = isPositiveValue
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400';
+
+            const directionClass = change > 0
+                ? 'usd-idr-history-pill-up'
+                : change < 0
+                    ? 'usd-idr-history-pill-down'
+                    : 'usd-idr-history-pill-neutral';
+
+            const arrowPath = change > 0
+                ? 'M7 17L17 7M8 7h9v9'
+                : change < 0
+                    ? 'M7 7l10 10m0-9v9H8'
+                    : 'M6 12h12';
+
+            const formattedChange = change === 0 ? formatRupiah(0) : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+
+            return `
+            <div class="price-history-item">
+                <span class="price-history-time font-numeric">${item.time}</span>
+                <span class="price-history-price font-numeric ${valueColorClass}">${formatRupiah(value)}</span>
+                <span class="usd-idr-history-pill ${directionClass} font-numeric" title="Perubahan dibanding menit sebelumnya">
+                    <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
+                    </svg>
+                    <span>${formattedChange}</span>
+                </span>
+            </div>
+            `;
+        })
+        .join('');
+}
+
 function updateSimulation() {
     if (!dom.simulationResults) return;
 
@@ -2002,9 +2287,6 @@ function updateSimulation() {
     const clearBtn = dom.clearSimulationBtn;
     if (clearBtn) clearBtn.classList.remove('hidden');
 
-
-
-    // Tampilkan tombol modal manual gram jika ada simulasi aktif
     if (dom.openManualGramModalBtn) {
         dom.openManualGramModalBtn.classList.remove('hidden');
     }
@@ -2027,6 +2309,7 @@ function updateSimulation() {
         saveSimulationToStorage();
         const node = ensureSimulationNode('buy');
         updateSimulationCardValues('buy', node, markedGram, currentGram, gramDiff, profitLoss);
+        addSimulationProfitHistoryEntry('buy', profitLoss, gramDiff);
 
         if (dom.simulationStatus) {
             updateSimulationStatus('buy');
@@ -2042,6 +2325,7 @@ function updateSimulation() {
         saveSimulationToStorage();
         const node = ensureSimulationNode('sell');
         updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
+        addSimulationProfitHistoryEntry('sell', profitLoss, gramDiff);
 
         if (dom.simulationStatus) {
             updateSimulationStatus('sell');
@@ -2086,7 +2370,8 @@ function loadSimulationFromStorage() {
         if (saved) {
             const parsed = JSON.parse(saved);
             if (Date.now() - parsed.timestamp < SIMULATION_TTL_MS) {
-                state.simulation = parsed.simulation;
+                state.simulation = parsed.simulation || {};
+                state.simulation.profitHistory = dedupeProfitHistory(state.simulation.profitHistory);
                 state.lastSimulationStorageKey = getSimulationStorageKey();
                 state.simulationStorageLastSavedAt = Number(parsed.timestamp) || Date.now();
                 debugLog('Simulasi dimuat dari localStorage:', state.simulation);
@@ -2128,7 +2413,8 @@ function clearSimulation() {
         buyPrice: null,
         sellPrice: null,
         mode: null,
-        gram: null
+        gram: null,
+        profitHistory: []
     };
     state.lastSimulationStorageKey = null;
     state.simulationStorageLastSavedAt = 0;
