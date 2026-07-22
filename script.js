@@ -239,11 +239,13 @@ function getSimulationStorageKey() {
 }
 
 function updateCountdownDisplay() {
-    if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
-    if (dom.countdownBar) {
-        const progress = Math.max(0, Math.min(1, state.countdown / COUNTDOWN_SECONDS));
-        dom.countdownBar.style.transform = `scaleX(${progress})`;
-    }
+    requestAnimationFrame(() => {
+        if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
+        if (dom.countdownBar) {
+            const progress = Math.max(0, Math.min(1, state.countdown / COUNTDOWN_SECONDS));
+            dom.countdownBar.style.transform = `scaleX(${progress})`;
+        }
+    });
 }
 
 /* Unified color class setter — menggantikan setCuanColorClass & setProfitColorClass */
@@ -2570,13 +2572,13 @@ function startTimers() {
 function tickTimers() {
     if (state.countdown > 0) {
         state.countdown--;
-        updateCountdownDisplay();
+        if (!document.hidden) updateCountdownDisplay();
     }
 
     if (state.countdown <= 0 && !state.countdownExpiredTriggered) {
         state.countdown = 0;
         state.countdownExpiredTriggered = true;
-        updateCountdownDisplay();
+        if (!document.hidden) updateCountdownDisplay();
         if (!state.isFetching) {
             fetchHarga();
         }
