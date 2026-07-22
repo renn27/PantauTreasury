@@ -463,12 +463,17 @@ function getPriceHistoryElements(type) {
     };
 }
 
-function renderPriceHistoryDropdown(type) {
-    const { list, count } = getPriceHistoryElements(type);
+function renderPriceHistoryDropdown(type, forceRender = false) {
+    const { card, dropdown, list, count } = getPriceHistoryElements(type);
     if (!list) return;
 
     const history = state.priceHistory || [];
     if (count) count.textContent = String(history.length);
+
+    // LAZY RENDER OPTIMIZATION: Tunda pembuatan HTML jika dropdown sedang tertutup
+    if (!forceRender && dropdown && dropdown.classList.contains('hidden')) {
+        return;
+    }
 
     if (!history.length) {
         list.innerHTML = '<p class="price-history-empty">Menunggu data</p>';
@@ -582,7 +587,7 @@ function togglePriceHistoryDropdown(type, forceOpen) {
         const otherType = type === 'buy' ? 'sell' : 'buy';
         togglePriceHistoryDropdown(otherType, false);
         toggleUsdIdrHistoryDropdown(false);
-        renderPriceHistoryDropdown(type);
+        renderPriceHistoryDropdown(type, true);
         // Pasang event delegation setelah render
         const { list } = getPriceHistoryElements(type);
         attachPriceHistoryClickDelegation(list, type);
@@ -750,11 +755,16 @@ function renderUsdIdrHistory(history) {
     renderUsdIdrRate(latest.price, latest.time, comparisonPrice);
 }
 
-function renderUsdIdrHistoryDropdown() {
+function renderUsdIdrHistoryDropdown(forceRender = false) {
     if (!dom.usdIdrHistoryList) return;
 
     const history = state.usdIdrHistory || [];
     if (dom.usdIdrHistoryCount) dom.usdIdrHistoryCount.textContent = String(history.length);
+
+    // LAZY RENDER OPTIMIZATION: Tunda pembuatan HTML jika dropdown sedang tertutup
+    if (!forceRender && dom.usdIdrHistoryDropdown && dom.usdIdrHistoryDropdown.classList.contains('hidden')) {
+        return;
+    }
 
     if (!history.length) {
         dom.usdIdrHistoryList.innerHTML = '<p class="usd-idr-history-empty">Menunggu data</p>';
@@ -808,7 +818,7 @@ function toggleUsdIdrHistoryDropdown(forceOpen) {
     if (shouldOpen) {
         togglePriceHistoryDropdown('buy', false);
         togglePriceHistoryDropdown('sell', false);
-        renderUsdIdrHistoryDropdown();
+        renderUsdIdrHistoryDropdown(true);
     }
 }
 
@@ -2196,14 +2206,14 @@ function toggleProfitHistoryDropdown(mode, forceOpen) {
     if (nextState) {
         dropdown.classList.remove('hidden');
         tile.setAttribute('aria-expanded', 'true');
-        renderProfitHistoryDropdown(mode);
+        renderProfitHistoryDropdown(mode, true);
     } else {
         dropdown.classList.add('hidden');
         tile.setAttribute('aria-expanded', 'false');
     }
 }
 
-function renderProfitHistoryDropdown(mode) {
+function renderProfitHistoryDropdown(mode, forceRender = false) {
     const node = state.simulationNodes[mode] || document.getElementById(mode === 'buy' ? 'buySimulation' : 'sellSimulation');
     if (!node) return;
 
@@ -2211,6 +2221,7 @@ function renderProfitHistoryDropdown(mode) {
     const list = slots.profitHistoryList;
     const count = slots.profitHistoryCount;
     const pill = slots.profitChangePill;
+    const dropdown = slots.profitHistoryDropdown;
     if (!list) return;
 
     const history = state.simulation.profitHistory || [];
@@ -2227,6 +2238,11 @@ function renderProfitHistoryDropdown(mode) {
             const prev = history[history.length - 2];
             renderPriceChangeIndicator(pill, Number(latest.profitLoss), Number(prev.profitLoss));
         }
+    }
+
+    // LAZY RENDER OPTIMIZATION: Tunda pembuatan HTML jika dropdown sedang tertutup
+    if (!forceRender && dropdown && dropdown.classList.contains('hidden')) {
+        return;
     }
 
     if (history.length === 0) {
