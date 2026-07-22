@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v4';
+const CACHE_NAME = 'pantau-treasury-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -36,21 +36,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Dynamic caching strategy
+// Fetch Event - Stale-While-Revalidate for Assets, Network-First for APIs
 self.addEventListener('fetch', (event) => {
-  // Only process GET requests to prevent TypeError on POST/write requests (e.g. rate POST)
   if (event.request.method !== 'GET') {
     return;
   }
 
   const requestUrl = new URL(event.request.url);
 
-  // Network-First for API calls (e.g., Treasury.id) to ensure real-time data when online
+  // Network-First for API calls to ensure fresh prices online
   if (requestUrl.hostname.includes('treasury.id') || requestUrl.pathname.includes('/api/')) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Cache the fresh API response
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
@@ -58,36 +56,38 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // If offline, serve from cache
           return caches.match(event.request);
         })
     );
     return;
   }
 
-  // Cache-First for static assets to ensure instant app loads
+  // Stale-While-Revalidate for static assets & fonts (instant load + background update)
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          const isCachable = networkResponse && networkResponse.status === 200 && (
+            networkResponse.type === 'basic' || 
+            (networkResponse.type === 'cors' && (
+              requestUrl.hostname.includes('fonts.gstatic.com') ||
+              requestUrl.hostname.includes('fonts.googleapis.com')
+            ))
+          );
 
-      return fetch(event.request).then((response) => {
-        // Cache successful basic responses, and cors responses from fonts.gstatic.com for full offline fonts support
-        const isCachableType = response.type === 'basic' || 
-          (response.type === 'cors' && requestUrl.hostname.includes('fonts.gstatic.com'));
-
-        if (!response || response.status !== 200 || !isCachableType) {
-          return response;
-        }
-
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
+          if (isCachable) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Silent fallback on network error
         });
 
-        return response;
-      });
+      return cachedResponse || fetchPromise;
     })
   );
 });
