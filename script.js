@@ -2217,8 +2217,11 @@ function renderProfitHistoryDropdown(mode) {
     if (count) count.textContent = `${history.length} data`;
 
     if (pill) {
-        if (history.length < 2) {
+        if (history.length === 0) {
             renderPriceChangeIndicator(pill, null, null);
+        } else if (history.length === 1) {
+            const latest = history[0];
+            renderPriceChangeIndicator(pill, Number(latest.profitLoss), 0);
         } else {
             const latest = history[history.length - 1];
             const prev = history[history.length - 2];
@@ -2238,7 +2241,7 @@ function renderProfitHistoryDropdown(mode) {
         .map((item, index, reversed) => {
             const nextOlder = reversed[index + 1];
             const value = Number(item[valueKey]);
-            const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
+            const change = nextOlder ? value - Number(nextOlder[valueKey]) : value;
 
             const isPositiveValue = value >= 0;
             const valueColorClass = isPositiveValue

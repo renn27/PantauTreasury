@@ -36,9 +36,8 @@ body {
 }
 
 .price-card-shell,
-.glass-card,
 .simulation-result-tile {
-    contain: content;
+    contain: style;
 }
 
 /* ===== TYPOGRAPHY UTILITY ===== */
