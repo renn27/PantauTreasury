@@ -185,6 +185,8 @@ try {
 loadPriceHistory();
 renderPriceHistoryDropdown('buy');
 renderPriceHistoryDropdown('sell');
+attachPriceHistoryClickDelegation(dom.buyPriceHistoryList, 'buy');
+attachPriceHistoryClickDelegation(dom.sellPriceHistoryList, 'sell');
 renderCachedData();
 // Fetch fresh data immediately (starts network request parallel to DOM Ready parsing)
 fetchHarga();
@@ -283,9 +285,11 @@ function renderPriceValue(el, current, previous) {
 
     el.classList.remove('price-roll-up', 'price-roll-down');
     card?.classList.remove('price-card-rise', 'price-card-fall');
-    void el.offsetWidth;
-    el.classList.add(rollClass);
-    card?.classList.add(cardClass);
+    
+    requestAnimationFrame(() => {
+        el.classList.add(rollClass);
+        card?.classList.add(cardClass);
+    });
 }
 
 function getPreviousDistinctPrice(type, currentPrice) {
@@ -487,6 +491,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
         return;
     }
 
+    const savedScrollTop = list.scrollTop;
     const valueKey = type === 'buy' ? 'buy' : 'sell';
     list.innerHTML = history
         .slice()
@@ -509,7 +514,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
             const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
 
             return `
-            <div class="price-history-item price-history-item--clickable" data-price="${value}" data-type="${type}" role="button" tabindex="0" title="Klik untuk simulasi ${type === 'buy' ? 'beli' : 'jual'} Rp ${value.toLocaleString('id-ID')}">
+            <div class="price-history-item price-history-item--clickable" data-price="${value}" data-type="${type}" data-time="${item.updated}" role="button" tabindex="0" title="Klik untuk simulasi ${type === 'buy' ? 'beli' : 'jual'} Rp ${value.toLocaleString('id-ID')}">
                 <span class="price-history-time font-numeric">${time}</span>
                 <span class="price-history-price font-numeric">${formatRupiah(value)}</span>
                 <span class="usd-idr-history-pill ${directionClass} font-numeric">
@@ -522,31 +527,125 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
         `;
         })
         .join('');
+
+    if (savedScrollTop > 0) {
+        list.scrollTop = savedScrollTop;
+    }
 }
 
 /**
- * Trigger simulasi langsung dari klik row harga di dropdown.
+ * Trigger simulasi langsung dari klik row harga di dropdown dengan kalkulasi retroaktif.
  * @param {'buy'|'sell'} type
  * @param {number} price
+ * @param {string} [updatedTime]
  */
-function simulateFromHistory(type, price) {
+function simulateFromHistory(type, price, updatedTime) {
     if (!price || price <= 0) return;
-    resetSimulationProfitHistory();
-    if (type === 'buy') {
-        state.simulation.buyPrice = price;
-        state.simulation.sellPrice = null;
-        state.simulation.mode = 'buy';
+
+    toggleProfitHistoryDropdown('buy', false);
+    toggleProfitHistoryDropdown('sell', false);
+
+    const isBuy = type === 'buy';
+    const mode = isBuy ? 'buy' : 'sell';
+
+    state.simulation.buyPrice = isBuy ? price : null;
+    state.simulation.sellPrice = !isBuy ? price : null;
+    state.simulation.mode = mode;
+    state.simulation.startTime = updatedTime || null;
+
+    if (isBuy) {
         state.simulation.gram = SIMULATION_BUY_BASE / price;
         dom.markBuyBtn?.classList.add('simulation-active');
         dom.markSellBtn?.classList.remove('simulation-active');
     } else {
-        state.simulation.sellPrice = price;
-        state.simulation.buyPrice = null;
-        state.simulation.mode = 'sell';
         state.simulation.gram = SIMULATION_SELL_BASE / price;
         dom.markSellBtn?.classList.add('simulation-active');
         dom.markBuyBtn?.classList.remove('simulation-active');
     }
+
+    // Hitung riwayat profit/loss ke belakang (backfill) dari titik waktu harga yang dipilih sampai terbaru
+    const historyList = state.priceHistory || [];
+    const profitHistoryEntries = [];
+
+    let startIndex = -1;
+    if (updatedTime) {
+        startIndex = historyList.findIndex(item => item.updated === updatedTime);
+        if (startIndex === -1) {
+            const targetMs = new Date(updatedTime).getTime();
+            if (!Number.isNaN(targetMs)) {
+                startIndex = historyList.findIndex(item => new Date(item.updated).getTime() >= targetMs);
+            }
+        }
+    }
+
+    // Jika tidak ditemukan atau tidak ada updatedTime, cari index pertama dengan harga yang sama atau mulai dari 0
+    if (startIndex === -1) {
+        startIndex = historyList.findIndex(item => Number(item[mode]) === price);
+    }
+    if (startIndex === -1) {
+        startIndex = 0;
+    }
+
+    const relevantPriceSlice = historyList.slice(startIndex);
+
+    for (const hItem of relevantPriceSlice) {
+        const hBuy = Number(hItem.buy);
+        const hSell = Number(hItem.sell);
+        const hDate = new Date(hItem.updated);
+        const hTimeMs = hDate.getTime();
+
+        if (!Number.isFinite(hBuy) || !Number.isFinite(hSell) || Number.isNaN(hTimeMs)) continue;
+
+        let profitLoss = 0;
+        let gramDiff = 0;
+
+        if (isBuy) {
+            const markedGram = floor4(SIMULATION_BUY_BASE / price);
+            const currentGram = floor4(SIMULATION_SELL_BASE / hSell);
+            gramDiff = markedGram - currentGram;
+            profitLoss = gramDiff * hSell;
+        } else {
+            const markedGram = floor4(SIMULATION_SELL_BASE / price);
+            const currentGram = floor4(SIMULATION_BUY_BASE / hBuy);
+            gramDiff = currentGram - markedGram;
+            profitLoss = gramDiff * hSell;
+        }
+
+        profitHistoryEntries.push({
+            profitLoss: Math.round(profitLoss),
+            gramDiff: floor4(gramDiff),
+            time: formatTimeIdHms(hDate),
+            timestamp: hTimeMs
+        });
+    }
+
+    // Masukkan data harga saat ini (live) jika ada
+    const liveBuy = Number(state.currentBuy);
+    const liveSell = Number(state.currentSell);
+    if (Number.isFinite(liveBuy) && Number.isFinite(liveSell) && liveBuy > 0 && liveSell > 0) {
+        let liveProfitLoss = 0;
+        let liveGramDiff = 0;
+        if (isBuy) {
+            const markedGram = floor4(SIMULATION_BUY_BASE / price);
+            const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
+            liveGramDiff = markedGram - currentGram;
+            liveProfitLoss = liveGramDiff * liveSell;
+        } else {
+            const markedGram = floor4(SIMULATION_SELL_BASE / price);
+            const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
+            liveGramDiff = currentGram - markedGram;
+            liveProfitLoss = liveGramDiff * liveSell;
+        }
+        profitHistoryEntries.push({
+            profitLoss: Math.round(liveProfitLoss),
+            gramDiff: floor4(liveGramDiff),
+            time: formatTimeIdHms(new Date()),
+            timestamp: Date.now()
+        });
+    }
+
+    state.simulation.profitHistory = dedupeProfitHistory(profitHistoryEntries);
+
     updateSimulation();
     // Tutup dropdown setelah memilih
     togglePriceHistoryDropdown(type, false);
@@ -566,7 +665,8 @@ function attachPriceHistoryClickDelegation(list, type) {
         if (!row) return;
         const price = Number(row.dataset.price);
         const rowType = row.dataset.type || type;
-        simulateFromHistory(rowType, price);
+        const time = row.dataset.time;
+        simulateFromHistory(rowType, price, time);
     });
     list.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -575,7 +675,8 @@ function attachPriceHistoryClickDelegation(list, type) {
         e.preventDefault();
         const price = Number(row.dataset.price);
         const rowType = row.dataset.type || type;
-        simulateFromHistory(rowType, price);
+        const time = row.dataset.time;
+        simulateFromHistory(rowType, price, time);
     });
 }
 
@@ -778,6 +879,7 @@ function renderUsdIdrHistoryDropdown(forceRender = false) {
         return;
     }
 
+    const savedScrollTop = dom.usdIdrHistoryList.scrollTop;
     dom.usdIdrHistoryList.innerHTML = history
         .slice()
         .reverse()
@@ -810,6 +912,10 @@ function renderUsdIdrHistoryDropdown(forceRender = false) {
         `;
         })
         .join('');
+
+    if (savedScrollTop > 0) {
+        dom.usdIdrHistoryList.scrollTop = savedScrollTop;
+    }
 }
 
 function toggleUsdIdrHistoryDropdown(forceOpen) {
@@ -892,7 +998,7 @@ function closeUsdIdrFeed() {
 }
 
 function setupUsdIdrWsHandlers(ws) {
-    ws.onopen = () => {
+    const startPing = () => {
         state.usdIdrReconnectAttempt = 0;
         if (!state.usdIdrLastPrice) setUsdIdrStatus('Live');
 
@@ -904,6 +1010,13 @@ function setupUsdIdrWsHandlers(ws) {
             }
         }, 25000);
     };
+
+    ws.onopen = startPing;
+
+    // Jika koneksi sudah terbuka saat handler dipasang, langsung mulai ping
+    if (ws.readyState === WebSocket.OPEN) {
+        startPing();
+    }
 
     ws.onmessage = async (event) => {
         try {
@@ -1471,6 +1584,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dom.manualGramModalBackdrop) {
         dom.manualGramModalBackdrop.addEventListener('click', closeManualGramModal);
+    }
+
+    // Keyboard accessibility untuk modal manual gram (ESC to close)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dom.manualGramModal && !dom.manualGramModal.classList.contains('hidden')) {
+            closeManualGramModal();
+        }
+    });
+
+    if (dom.manualGramInput) {
+        dom.manualGramInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const activeMode = state.simulation.mode || 'buy';
+                if (applyManualGramSimulation(activeMode)) {
+                    closeManualGramModal();
+                }
+            }
+        });
     }
 
     if (dom.markBuyBtn) {
@@ -2343,6 +2475,7 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
         return;
     }
 
+    const savedScrollTop = list.scrollTop;
     const valueKey = 'profitLoss';
     list.innerHTML = history
         .slice()
@@ -2350,7 +2483,7 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
         .map((item, index, reversed) => {
             const nextOlder = reversed[index + 1];
             const value = Number(item[valueKey]);
-            const change = nextOlder ? value - Number(nextOlder[valueKey]) : value;
+            const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
 
             const isPositiveValue = value >= 0;
             const valueColorClass = isPositiveValue
@@ -2385,6 +2518,10 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
             `;
         })
         .join('');
+
+    if (savedScrollTop > 0) {
+        list.scrollTop = savedScrollTop;
+    }
 }
 
 function updateSimulation() {
