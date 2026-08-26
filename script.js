@@ -70,8 +70,6 @@ try {
 
 /* ================= GLOBAL STATE ================= */
 let state = {
-    countdown: COUNTDOWN_SECONDS,
-    countdownExpiredTriggered: false,
     timerTicker: null,
     fetchController: null,
     isAutoFetching: false,
@@ -150,7 +148,7 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
 const ids = [
     'buyPriceCard', 'sellPriceCard', 'hargaBeli', 'hargaJual', 'hargaBeliChange', 'hargaJualChange', 'spreadPersen',
     'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
-    'countdown', 'countdownBar', 'simulationResults', 'noSimulation',
+    'simulationResults', 'noSimulation',
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
     'refreshApiBtn', 'themeText', 'bigRefreshBtn',
     'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
@@ -242,16 +240,6 @@ function getSimulationStorageKey() {
         sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : '',
         historyLen
     ].join('|');
-}
-
-function updateCountdownDisplay() {
-    requestAnimationFrame(() => {
-        if (dom.countdown) dom.countdown.textContent = `${state.countdown}s`;
-        if (dom.countdownBar) {
-            const progress = Math.max(0, Math.min(1, state.countdown / COUNTDOWN_SECONDS));
-            dom.countdownBar.style.transform = `scaleX(${progress})`;
-        }
-    });
 }
 
 /* Unified color class setter — menggantikan setCuanColorClass & setProfitColorClass */
@@ -1754,9 +1742,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!state.timerTicker) {
                 startTimers();
             }
-            if (state.countdown <= 0 && !state.isFetching) {
-                fetchHarga();
-            }
             connectUsdIdrFeed();
         }
     });
@@ -1776,7 +1761,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.retryCount = 0;
         state.targetMinute = null;
         clearRetryTimeout();
-        resetCountdown();
         fetchHarga();
     });
 
@@ -2078,9 +2062,6 @@ function updateUI(data) {
         const updated = new Date(data.updated);
         dom.lastUpdate.textContent = formatTimeIdHms(updated);
     }
-
-    // Reset countdown
-    resetCountdown();
 
     // Update simulation
     if (state.simulation.mode) {
@@ -2765,44 +2746,16 @@ function updateSimulationStatus(mode) {
 }
 
 /* ================= TIMERS ================= */
-function resetCountdown() {
-    state.countdown = COUNTDOWN_SECONDS;
-    state.countdownExpiredTriggered = false;
-    updateCountdownDisplay();
-}
-
 function startTimers() {
     if (state.timerTicker) {
         clearInterval(state.timerTicker);
     }
-    updateCountdownDisplay();
     state.timerTicker = setInterval(tickTimers, 1000);
 }
 
 function tickTimers() {
     const serverNow = getServerNow();
     const serverSeconds = serverNow.getSeconds();
-
-    if (state.countdown > 0) {
-        state.countdown--;
-        if (!document.hidden) updateCountdownDisplay();
-    }
-
-    // Auto-sinkronisasi countdown dengan detik server jika ada pergeseran > 1 detik
-    const expectedCountdown = serverSeconds === 0 ? 60 : 60 - serverSeconds;
-    if (Math.abs(state.countdown - expectedCountdown) > 1) {
-        state.countdown = expectedCountdown;
-        if (!document.hidden) updateCountdownDisplay();
-    }
-
-    if (state.countdown <= 0 && !state.countdownExpiredTriggered) {
-        state.countdown = 0;
-        state.countdownExpiredTriggered = true;
-        if (!document.hidden) updateCountdownDisplay();
-        if (!state.isFetching) {
-            fetchHarga();
-        }
-    }
 
     // Auto-fetch tepat di detik ke-1 berdasarkan waktu server Treasury
     if (!state.isFetching && serverSeconds === 1) {

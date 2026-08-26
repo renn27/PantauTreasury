@@ -28,7 +28,6 @@ body {
 }
 
 /* ===== PERFORMANCE & HARDWARE ACCELERATION ===== */
-#countdownBar,
 .progress-bar {
     will-change: transform;
     transform: translateZ(0);
@@ -196,12 +195,6 @@ body {
     text-overflow: ellipsis;
     min-width: 0;
     flex-shrink: 1;
-}
-
-.update-info-countdown {
-    padding: 0.18rem 0.55rem;
-    font-size: 1.05rem;
-    line-height: 1.45rem;
 }
 
 .update-info-refresh {
@@ -1438,14 +1431,6 @@ body {
         flex: 1 !important;
     }
 
-    .update-info-countdown {
-        font-size: 0.85rem !important;
-        line-height: 1 !important;
-        padding: 0.1rem 0.35rem !important;
-        margin-left: 0.2rem !important;
-        flex-shrink: 0 !important;
-    }
-
     .update-info-progress {
         margin-top: auto !important;
     }
@@ -1860,20 +1845,6 @@ body {
 
 .dark .border-subtle {
     border-color: rgba(55, 65, 81, 0.75);
-}
-
-/* Progress bar styling */
-#countdownBar {
-    width: 100%;
-    transform-origin: left center;
-    transition: transform 1s linear;
-    will-change: transform;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
-    border-radius: 20px;
-}
-
-.dark #countdownBar {
-    background: linear-gradient(90deg, #2563eb, #3b82f6);
 }
 
 /* Reduce motion support */

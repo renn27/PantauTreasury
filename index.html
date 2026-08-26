@@ -26,8 +26,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260826125352">
-    <link rel="stylesheet" href="style.css?v=20260826125352">
+    <link rel="stylesheet" href="tailwind.css?v=20260826130600">
+    <link rel="stylesheet" href="style.css?v=20260826130600">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -78,8 +78,8 @@
                                             class="update-info-card glass-card rounded-lg p-2 card-elevated h-full grid-tight">
                                             <!-- Container flex dengan tinggi penuh -->
                                             <div class="update-info-layout flex h-full">
-                                                <!-- Bagian Kiri: Update Terakhir, Waktu, Countdown, Progress Bar -->
-                                                <div class="flex-1 flex flex-col">
+                                                <!-- Bagian Kiri: Update Terakhir & Waktu -->
+                                                <div class="flex-1 flex flex-col justify-between py-0.5">
                                                     <!-- Header -->
                                                     <div class="update-info-heading">
                                                         <span class="update-info-icon">
@@ -95,28 +95,12 @@
                                                         </p>
                                                     </div>
 
-                                                    <!-- Time & Countdown -->
-                                                    <div class="update-info-values flex items-center justify-between">
+                                                    <!-- Time -->
+                                                    <div class="update-info-values flex items-center">
                                                         <p id="lastUpdate"
                                                             class="update-info-time font-semibold text-gray-900 dark:text-gray-100 font-numeric tracking-tight truncate">
                                                             -
                                                         </p>
-                                                        <span id="countdown"
-                                                            class="update-info-countdown font-semibold text-blue-600 dark:text-blue-400 font-numeric bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                                                            60s
-                                                        </span>
-                                                    </div>
-
-                                                    <!-- Progress Bar -->
-                                                    <div class="update-info-progress">
-                                                        <div
-                                                            class="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                            <div id="countdownBar"
-                                                                class="h-full bg-blue-500 progress-bar rounded-full"
-                                                                style="transform: scaleX(1)"></div>
-                                                        </div>
-                                                        <div class="flex justify-end mt-1">
-                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -755,7 +739,7 @@
 
 
     <!-- Script -->
-    <script src="script.js?v=20260826125352" defer></script>
+    <script src="script.js?v=20260826130600" defer></script>
 </body>
 
 </html>
