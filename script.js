@@ -514,6 +514,7 @@ function simulateFromHistory(type, price, updatedTime) {
     state.simulation.sellPrice = !isBuy ? price : null;
     state.simulation.mode = mode;
     state.simulation.startTime = updatedTime || null;
+    state.simulation.time = updatedTime ? formatMinuteOnly(updatedTime) : formatMinuteOnly(getServerNow());
 
     if (isBuy) {
         state.simulation.gram = SIMULATION_BUY_BASE / price;
