@@ -20,7 +20,7 @@ const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
 const MY_USD_IDR_WS_URL = '';
 const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index'; 
-const USD_IDR_POLL_MS = 10 * 1000; 
+const USD_IDR_POLL_MS = 6 * 1000; 
 const DEBUG = false;
 
 /* ================= INSTANT LOAD ================= */
@@ -157,7 +157,7 @@ const ids = [
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
-    'promoBadge', 'promoPriceVal', 'limitBulanVal'
+    'promoBadge', 'promoPriceVal', 'limitBulanVal', 'backendStatusDot'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
@@ -712,6 +712,17 @@ function setUsdIdrStatus(text) {
     dom.usdIdrTime.textContent = text;
 }
 
+function setBackendConnectionStatus(isOnline, message = '') {
+    if (!dom.backendStatusDot) return;
+    if (isOnline) {
+        dom.backendStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500 inline-block ml-1 shadow-sm';
+        dom.backendStatusDot.title = message || 'Backend Vercel: Online';
+    } else {
+        dom.backendStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500 inline-block ml-1 shadow-sm animate-pulse';
+        dom.backendStatusDot.title = message || 'Backend Vercel: Offline (Fallback Aktif)';
+    }
+}
+
 function renderUsdIdrChangeIndicator(current, previous) {
     if (!dom.usdIdrChange) return;
 
@@ -1024,21 +1035,44 @@ async function connectUsdIdrFeed() {
 
     // 2. Fallback / Mode Utama: Gunakan REST API
     try {
-        debugLog('Mengambil data USD/IDR dari REST API...');
+        debugLog('Mengambil data dari REST API...');
         const res = await fetch(MY_USD_IDR_API_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
+        // 1. Update USD/IDR
         if (data.usd_idr_history && Array.isArray(data.usd_idr_history)) {
             renderUsdIdrHistory(data.usd_idr_history);
         } else if (data.history && Array.isArray(data.history)) {
             renderUsdIdrHistory(data.history);
+        }
+
+        if (data.usd_idr && data.usd_idr.price) {
+            renderUsdIdrRate(data.usd_idr.price, data.usd_idr.time);
         } else if (data.price) {
             renderUsdIdrRate(data.price, data.time);
         }
+
+        // 2. Sinkronisasi Emas jika tersedia dalam respons terpadu
+        if (data.gold && data.gold.buy && data.gold.sell && !state.isFetching) {
+            const goldBuy = Number(data.gold.buy);
+            const goldSell = Number(data.gold.sell);
+            if (goldBuy !== state.currentBuy || goldSell !== state.currentSell) {
+                const goldResult = {
+                    buy: goldBuy,
+                    sell: goldSell,
+                    updated: data.gold.updated_at
+                };
+                updateUI(goldResult);
+                priceCache.set(goldResult);
+            }
+        }
+
+        setBackendConnectionStatus(true, 'Backend Vercel: Online');
         scheduleUsdIdrPoll();
     } catch (e) {
         debugLog('REST API fetch error:', e);
+        setBackendConnectionStatus(false, 'Backend Vercel: Gangguan / Offline');
         setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
         state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, USD_IDR_POLL_MS);
     }
@@ -1111,7 +1145,7 @@ function triggerManualRefresh() {
     clearRetryTimeout();
 
     if (state.fetchController) state.fetchController.abort();
-    fetchHarga();
+    fetchHarga(true);
 }
 
 /* ================= SHARED: Button Feedback ================= */
@@ -1777,8 +1811,8 @@ function applyChartWidth(width) {
     }
 }
 
-/* ================= HYPER-FAST FETCH ================= */
-async function fetchHarga() {
+/* ================= HYPER-FAST FETCH (UNIFIED BACKEND & FAIL-SAFE) ================= */
+async function fetchHarga(force = false) {
     debugLog('Fetching data...');
 
     const fetchSeq = ++state.fetchSeq;
@@ -1810,51 +1844,106 @@ async function fetchHarga() {
         controller.abort();
     }, FETCH_TIMEOUT_MS);
 
+    const isForce = force || state.isManualRefresh;
+    let result = null;
+    let referenceTime = new Date();
+    let isCurrentMinute = false;
+
     try {
         const start = Date.now();
 
-        const res = await fetch('https://api.treasury.id/api/v1/antigrvty/gold/rate', {
-            method: 'POST',
-            signal: controller.signal,
-            headers: FETCH_HEADERS,
-            mode: 'cors',
-            credentials: 'omit',
-            cache: 'no-store',
-            redirect: 'follow',
-            referrerPolicy: 'no-referrer',
-            priority: 'high'
-        });
+        // 1. JALUR UTAMA: Ambil data terpadu dari Backend Vercel (Emas + USD/IDR Sekaligus)
+        try {
+            const targetUrl = isForce ? `${MY_USD_IDR_API_URL}?force=true` : MY_USD_IDR_API_URL;
+            const res = await fetch(targetUrl, {
+                signal: controller.signal,
+                headers: isForce ? { 'Cache-Control': 'no-cache' } : undefined
+            });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json && json.gold && json.gold.buy && json.gold.sell) {
+                    result = {
+                        buy: Number(json.gold.buy),
+                        sell: Number(json.gold.sell),
+                        updated: json.gold.updated_at
+                    };
+
+                    // Sinkronisasi waktu server dari payload
+                    if (json.timestamp) {
+                        const parsedTime = new Date(json.timestamp);
+                        if (!Number.isNaN(parsedTime.getTime())) {
+                            referenceTime = parsedTime;
+                        }
+                    }
+
+                    // Sinkronisasi data USD/IDR sekaligus
+                    if (json.usd_idr_history && Array.isArray(json.usd_idr_history)) {
+                        renderUsdIdrHistory(json.usd_idr_history);
+                    } else if (json.history && Array.isArray(json.history)) {
+                        renderUsdIdrHistory(json.history);
+                    }
+                    if (json.usd_idr && json.usd_idr.price) {
+                        renderUsdIdrRate(json.usd_idr.price, json.usd_idr.time);
+                    } else if (json.price) {
+                        renderUsdIdrRate(json.price, json.time);
+                    }
+
+                    setBackendConnectionStatus(true, 'Backend Vercel: Online');
+                }
+            }
+        } catch (backendErr) {
+            if (backendErr.name === 'AbortError') throw backendErr;
+            setBackendConnectionStatus(false, 'Backend Vercel: Offline (Fallback Direct Treasury)');
+            debugLog('Backend Vercel offline/error, mengaktifkan fail-safe direct fetch:', backendErr);
         }
 
-        const json = await res.json();
-        const data = json.data;
-        if (!data) {
-            throw new Error('Invalid API response');
+        // 2. JALUR CADANGAN (Fail-Safe Fallback): Direct fetch ke api.treasury.id jika backend Vercel gagal
+        if (!result) {
+            debugLog('Menjalankan Fail-Safe direct fetch ke api.treasury.id...');
+            const directRes = await fetch('https://api.treasury.id/api/v1/antigrvty/gold/rate', {
+                method: 'POST',
+                signal: controller.signal,
+                headers: FETCH_HEADERS,
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store',
+                redirect: 'follow',
+                referrerPolicy: 'no-referrer',
+                priority: 'high'
+            });
+
+            if (!directRes.ok) {
+                throw new Error(`HTTP ${directRes.status}`);
+            }
+
+            const directJson = await directRes.json();
+            const directData = directJson.data;
+            if (!directData) {
+                throw new Error('Invalid Treasury API response');
+            }
+
+            result = {
+                buy: Number(directData.buying_rate),
+                sell: Number(directData.selling_rate),
+                updated: directData.updated_at
+            };
+
+            const serverDateHeader = directRes.headers.get('Date');
+            if (serverDateHeader) {
+                const parsedHeaderDate = new Date(serverDateHeader);
+                if (!Number.isNaN(parsedHeaderDate.getTime())) {
+                    referenceTime = parsedHeaderDate;
+                }
+            }
         }
 
         const fetchTime = Date.now() - start;
         debugLog(`Fetch: ${fetchTime}ms`);
 
-        // Process data
-        const result = {
-            buy: data.buying_rate,
-            sell: data.selling_rate,
-            updated: data.updated_at
-        };
-
-        // Ambil header tanggal server untuk sinkronisasi waktu agar terhindar dari ketidaksesuaian waktu lokal klien
-        const serverDateHeader = res.headers.get('Date');
-        let referenceTime = serverDateHeader ? new Date(serverDateHeader) : new Date();
-        if (Number.isNaN(referenceTime.getTime())) {
-            referenceTime = new Date();
-        }
-
         // Periksa apakah data sudah sesuai dengan menit saat ini berdasarkan referensi waktu server
         const updated = new Date(result.updated);
-        const isCurrentMinute = isSameMinuteBucket(updated, referenceTime);
+        isCurrentMinute = isSameMinuteBucket(updated, referenceTime);
 
         debugLog(`Data updated at: ${formatTimeId(updated)}`);
         debugLog(`Reference time: ${formatTimeId(referenceTime)}`);
