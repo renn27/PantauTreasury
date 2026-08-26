@@ -143,6 +143,27 @@ const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
     second: '2-digit',
     hour12: false
 }).format;
+const formatTimeIdHm = new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+}).format;
+
+function formatMinuteOnly(val) {
+    if (!val) return '-';
+    if (typeof val === 'string') {
+        const timePart = val.includes(' ') ? val.split(' ')[1] : val;
+        const parts = timePart.split(/[:.]/);
+        if (parts.length >= 2) {
+            return `${parts[0]}.${parts[1]}`;
+        }
+    }
+    const d = val instanceof Date ? val : new Date(val);
+    if (!Number.isNaN(d.getTime())) {
+        return formatTimeIdHm(d);
+    }
+    return String(val);
+}
 
 // Cache DOM elements instantly on script execution (since script is deferred, DOM is ready)
 const ids = [
@@ -161,20 +182,12 @@ const ids = [
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
-    'promoBadge', 'promoPriceVal', 'limitBulanVal', 'backendStatusDot'
+    'backendStatusDot'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
 });
-
-// Load promo/limit from cache
-try {
-    const savedPromo = localStorage.getItem('promo_limit_cache');
-    if (savedPromo) {
-        const parsed = JSON.parse(savedPromo);
-        renderPromoLimitInfo(parsed.promo_status, parsed.limit_bulan, parsed.promo_price);
-    }
-} catch (e) { }
+dom.bigRefreshIcon = dom.bigRefreshBtn?.querySelector('svg');
 
 // Render cached data immediately
 loadPriceHistory();
@@ -238,6 +251,7 @@ function getSimulationStorageKey() {
         sim.buyPrice || '',
         sim.sellPrice || '',
         sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : '',
+        sim.time || '',
         historyLen
     ].join('|');
 }
@@ -1099,36 +1113,6 @@ function renderDerivedValues(values) {
     }
 }
 
-/* ================= SHARED: Render Promo & Limit Info ================= */
-function renderPromoLimitInfo(promoStatus, limitBulan, promoPrice) {
-    if (dom.promoBadge) {
-        if (promoStatus === true || promoStatus === 'true') {
-            dom.promoBadge.textContent = 'ON';
-            dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-        } else {
-            dom.promoBadge.textContent = 'OFF';
-            dom.promoBadge.className = 'text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-        }
-    }
-    
-    if (dom.limitBulanVal) {
-        dom.limitBulanVal.textContent = limitBulan !== undefined && limitBulan !== null ? limitBulan : '-';
-    }
-    
-    if (dom.promoPriceVal) {
-        dom.promoPriceVal.textContent = promoPrice ? formatRupiah(promoPrice) : '-';
-    }
-    
-    // Save to cache
-    try {
-        localStorage.setItem('promo_limit_cache', JSON.stringify({
-            promo_status: promoStatus,
-            limit_bulan: limitBulan,
-            promo_price: promoPrice
-        }));
-    } catch (e) {}
-}
-
 /* ================= SHARED: Manual Refresh ================= */
 function triggerManualRefresh() {
     state.isManualRefresh = true;
@@ -1501,9 +1485,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 : fastParse(dom.hargaBeli.textContent);
             if (price > 0) {
                 resetSimulationProfitHistory();
+                const currentPriceObj = priceCache.get();
+                const timeStr = currentPriceObj?.updated 
+                    ? formatMinuteOnly(currentPriceObj.updated)
+                    : formatMinuteOnly(getServerNow());
                 state.simulation.buyPrice = price;
                 state.simulation.sellPrice = null;
                 state.simulation.mode = 'buy';
+                state.simulation.time = timeStr;
                 state.simulation.gram = SIMULATION_BUY_BASE / price;
 
                 dom.markBuyBtn.classList.add('simulation-active');
@@ -1521,9 +1510,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 : fastParse(dom.hargaJual.textContent);
             if (price > 0) {
                 resetSimulationProfitHistory();
+                const currentPriceObj = priceCache.get();
+                const timeStr = currentPriceObj?.updated 
+                    ? formatMinuteOnly(currentPriceObj.updated)
+                    : formatMinuteOnly(getServerNow());
                 state.simulation.sellPrice = price;
                 state.simulation.buyPrice = null;
                 state.simulation.mode = 'sell';
+                state.simulation.time = timeStr;
                 state.simulation.gram = SIMULATION_SELL_BASE / price;
 
                 dom.markSellBtn.classList.add('simulation-active');
@@ -1555,18 +1549,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Big refresh button
     if (dom.bigRefreshBtn) {
-        dom.bigRefreshIcon = dom.bigRefreshBtn.querySelector('svg');
-        if (dom.bigRefreshIcon) {
-            dom.bigRefreshIcon.classList.add('refresh-icon');
-            dom.bigRefreshIcon.addEventListener('animationend', () => {
+        if (!dom.bigRefreshIcon) {
+            dom.bigRefreshIcon = dom.bigRefreshBtn.querySelector('svg');
+        }
+
+        const resetSpin = () => {
+            if (dom.bigRefreshIcon) {
                 dom.bigRefreshIcon.classList.remove('refresh-spin-once');
-            });
+            }
+        };
+
+        if (dom.bigRefreshIcon) {
+            dom.bigRefreshIcon.addEventListener('animationend', resetSpin);
         }
 
         dom.bigRefreshBtn.addEventListener('click', () => {
             if (dom.bigRefreshIcon) {
-                dom.bigRefreshIcon.classList.remove('refresh-spin-once');
-                void dom.bigRefreshIcon.offsetWidth;
+                dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
+                void dom.bigRefreshIcon.getBoundingClientRect();
                 dom.bigRefreshIcon.classList.add('refresh-spin-once');
             }
             triggerManualRefresh();
@@ -1809,14 +1809,8 @@ async function fetchHarga(force = false) {
     state.isFetching = true;
     state.lastFetchTime = Date.now();
 
-    // TAMPILKAN STATUS FETCHING di UI
-    if (dom.lastUpdate) {
-        if (state.isRetrying) {
-            const max = state.activeMaxRetry || state.MAX_RETRY;
-            dom.lastUpdate.textContent = `retry (${state.retryCount}/${max})`;
-        } else {
-            dom.lastUpdate.textContent = 'Fetching...';
-        }
+    if (dom.bigRefreshIcon) {
+        dom.bigRefreshIcon.classList.add('refresh-spin');
     }
 
     // Cancel previous fetch
@@ -2020,6 +2014,9 @@ async function fetchHarga(force = false) {
         }
         if (state.fetchSeq === fetchSeq) {
             state.isFetching = false;
+        }
+        if (dom.bigRefreshIcon) {
+            dom.bigRefreshIcon.classList.remove('refresh-spin');
         }
     }
 }
@@ -2260,16 +2257,23 @@ function applyManualGramSimulation(mode) {
     updateManualPricePreview();
     resetSimulationProfitHistory();
 
+    const currentPriceObj = priceCache.get();
+    const timeStr = currentPriceObj?.updated 
+        ? formatMinuteOnly(currentPriceObj.updated)
+        : formatMinuteOnly(getServerNow());
+
     if (mode === 'buy') {
         state.simulation.buyPrice = SIMULATION_BUY_BASE / gram;
         state.simulation.sellPrice = null;
         state.simulation.mode = 'buy';
+        state.simulation.time = timeStr;
         dom.markBuyBtn?.classList.add('simulation-active');
         dom.markSellBtn?.classList.remove('simulation-active');
     } else {
         state.simulation.sellPrice = SIMULATION_SELL_BASE / gram;
         state.simulation.buyPrice = null;
         state.simulation.mode = 'sell';
+        state.simulation.time = timeStr;
         dom.markSellBtn?.classList.add('simulation-active');
         dom.markBuyBtn?.classList.remove('simulation-active');
     }
@@ -2571,8 +2575,8 @@ function loadSimulationFromStorage() {
 
                 const timestampEl = dom.simulationTimestamp;
                 if (timestampEl) {
-                    const savedTime = new Date(parsed.timestamp);
-                    timestampEl.textContent = `Update terakhir : ${formatTimeIdHms(savedTime)}`;
+                    const timeDisplay = state.simulation.time ? formatMinuteOnly(state.simulation.time) : formatMinuteOnly(new Date(parsed.timestamp));
+                    timestampEl.textContent = `Menit simulasi : ${timeDisplay}`;
                 }
 
                 if (state.simulation.mode === 'buy' && state.simulation.buyPrice) {
@@ -2607,6 +2611,7 @@ function clearSimulation() {
         sellPrice: null,
         mode: null,
         gram: null,
+        time: null,
         profitHistory: []
     };
     state.lastSimulationStorageKey = null;
@@ -2637,7 +2642,7 @@ function clearSimulation() {
 
     const timestampEl = dom.simulationTimestamp;
     if (timestampEl) {
-        timestampEl.textContent = 'Update terakhir : -';
+        timestampEl.textContent = 'Menit simulasi : -';
     }
 
     if (dom.simulationStatus) {
@@ -2699,7 +2704,8 @@ function updateSimulationStatus(mode) {
 
     const timestampEl = dom.simulationTimestamp;
     if (timestampEl) {
-        timestampEl.textContent = `Update terakhir : ${formatTimeIdHms(new Date())}`;
+        const timeDisplay = state.simulation.time ? formatMinuteOnly(state.simulation.time) : formatMinuteOnly(getServerNow());
+        timestampEl.textContent = `Menit simulasi : ${timeDisplay}`;
     }
 
     // Update icon color

@@ -188,8 +188,8 @@ body {
 }
 
 .update-info-time {
-    font-size: 1.72rem;
-    line-height: 1.9rem;
+    font-size: 1.55rem;
+    line-height: 1.75rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -198,7 +198,7 @@ body {
 }
 
 .update-info-refresh {
-    flex: 0 0 4.75rem;
+    flex: 0 0 3.75rem;
 }
 
 .update-info-heading {
@@ -239,11 +239,11 @@ body {
 }
 
 .header-controls-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .header-action-panel {
-    grid-column: span 2 / span 2;
+    grid-column: span 1 / span 1;
     position: relative;
     height: 100%;
     display: flex;
@@ -672,7 +672,7 @@ body {
 }
 
 .stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .stats-grid .glass-card {
@@ -1285,6 +1285,26 @@ body {
     100% { border-color: var(--price-card-base-border); box-shadow: 0 4px 12px -7px rgb(15 23 42 / 0.2); }
 }
 
+/* ===== REFRESH BUTTON SPIN ANIMATIONS ===== */
+@keyframes refresh-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.refresh-spin {
+    animation: refresh-spin 0.75s linear infinite !important;
+    transform-origin: center center !important;
+}
+
+.refresh-spin-once {
+    animation: refresh-spin 0.65s cubic-bezier(0.4, 0, 0.2, 1) 1 !important;
+    transform-origin: center center !important;
+}
+
 /* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar {
     width: 6px;
@@ -1570,23 +1590,7 @@ body {
       }
 
     .stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-
-    .stats-grid > :nth-child(1) {
-        order: 1 !important;
-    }
-
-    .stats-grid > :nth-child(2) {
-        order: 3 !important;
-    }
-
-    .stats-grid > :nth-child(3) {
-        order: 4 !important;
-    }
-
-    .stats-grid > :nth-child(4) {
-        order: 2 !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     }
 
     .stats-grid .glass-card {

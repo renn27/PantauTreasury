@@ -26,8 +26,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260826130600">
-    <link rel="stylesheet" href="style.css?v=20260826130600">
+    <link rel="stylesheet" href="tailwind.css?v=20260826132738">
+    <link rel="stylesheet" href="style.css?v=20260826132738">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -71,9 +71,9 @@
                         <!-- Controls & Update Info -->
                         <div class="header-controls-col col-span-2">
                             <div class="h-full flex items-center">
-                                <div class="header-controls-grid w-full h-full grid grid-cols-5 gap-2 items-stretch">
-                                    <!-- Update Info Panel -->
-                                    <div class="col-span-3 h-full">
+                                <div class="header-controls-grid w-full h-full grid grid-cols-2 gap-2 items-stretch">
+                                    <!-- Update Info Panel (50%) -->
+                                    <div class="col-span-1 h-full">
                                         <div
                                             class="update-info-card glass-card rounded-lg p-2 card-elevated h-full grid-tight">
                                             <!-- Container flex dengan tinggi penuh -->
@@ -107,7 +107,7 @@
                                                 <!-- Big Refresh Button - FULL TINGGI CARD dengan desain elegan -->
                                                 <button id="bigRefreshBtn"
                                                     class="update-info-refresh bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-700 dark:hover:to-blue-800 rounded-xl transition-smooth duration-300 group flex flex-col items-center justify-center shadow-md hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]">
-                                                    <svg class="ui-icon w-8 h-8 text-white group-hover:scale-105 transition-transform duration-200 ease-out"
+                                                    <svg class="ui-icon w-7 h-7 text-white group-hover:scale-105 transition-transform duration-200 ease-out"
                                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
                                                             d="M20 11a8 8 0 00-14.8-4L4 9m0 0V4m0 5h5M4 13a8 8 0 0014.8 4L20 15m0 0v5m0-5h-5">
@@ -118,8 +118,8 @@
                                         </div>
                                     </div>
 
-                                    <!-- USD/IDR Panel -->
-                                    <div class="header-action-panel col-span-2 h-full relative">
+                                    <!-- USD/IDR Panel (50%) -->
+                                    <div class="header-action-panel col-span-1 h-full relative">
                                         <div id="usdIdrCard"
                                             class="usd-idr-card stats-card glass-card rounded-lg p-3 card-hover card-elevated h-full"
                                             role="button" tabindex="0" aria-expanded="false"
@@ -275,39 +275,7 @@
 
                     <!-- ROW 3: Ringkasan transaksi -->
                     <div class="stats-row min-h-0">
-                        <div class="stats-grid grid grid-cols-4 gap-2">
-                            <!-- Info WebSocket (Promo & Limit) -->
-                            <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
-                                <div class="flex items-center justify-between mb-1.5">
-                                    <div class="flex items-center">
-                                        <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0 text-blue-500"
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                        <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                            Promo & Limit
-                                        </p>
-                                    </div>
-                                    <span id="promoBadge"
-                                        class="text-xxs px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                                        -
-                                    </span>
-                                </div>
-                                <div class="flex flex-col gap-0.5 mt-1">
-                                    <div class="flex justify-between items-center text-xxs">
-                                        <span class="text-gray-500">Limit Transaksi:</span>
-                                        <span id="limitBulanVal"
-                                            class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
-                                    </div>
-                                    <div class="flex justify-between items-center text-xxs">
-                                        <span class="text-gray-500">Harga Promo:</span>
-                                        <span id="promoPriceVal"
-                                            class="font-bold text-gray-900 dark:text-gray-100 font-numeric text-right">-</span>
-                                    </div>
-                                </div>
-                            </div>
-
+                        <div class="stats-grid grid grid-cols-3 gap-2">
                             <!-- Gram Beli 60jt -->
                             <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
@@ -445,8 +413,8 @@
                                                 Status Simulasi
                                             </p>
                                             <span id="simulationTimestamp"
-                                                class="simulation-timestamp text-xxs text-gray-500 dark:text-gray-400 font-medium">
-                                                Update terakhir : -
+                                                class="simulation-timestamp text-xxs text-gray-500 dark:text-gray-400 font-medium font-numeric">
+                                                Menit simulasi : -
                                             </span>
                                         </div>
 
@@ -739,7 +707,7 @@
 
 
     <!-- Script -->
-    <script src="script.js?v=20260826130600" defer></script>
+    <script src="script.js?v=20260826132738" defer></script>
 </body>
 
 </html>
