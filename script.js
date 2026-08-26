@@ -1229,8 +1229,8 @@ function scheduleRetry(reason) {
     // Tentukan jeda retry berdasarkan alasan
     let delay;
     if (reason === 'stale-data') {
-        // Untuk data stale, gunakan jeda 1.5s - 2s agar tidak membombardir server secara berlebihan
-        delay = state.retryCount <= 5 ? 1500 : 2000;
+        // Retry super cepat (800ms) di 4 percobaan awal agar langsung menangkap pergantian harga Treasury di detik 2-4
+        delay = state.retryCount <= 4 ? 800 : 1500;
     } else {
         // Untuk timeout/error, gunakan exponential backoff cepat
         delay = Math.min(2000, 500 + (state.retryCount * 300));
@@ -1854,10 +1854,11 @@ async function fetchHarga(force = false) {
 
         // 1. JALUR UTAMA: Ambil data terpadu dari Backend Vercel (Emas + USD/IDR Sekaligus)
         try {
-            const targetUrl = isForce ? `${MY_USD_IDR_API_URL}?force=true` : MY_USD_IDR_API_URL;
+            const isTransition = state.isAutoFetching || state.isRetrying || isForce;
+            const targetUrl = isTransition ? `${MY_USD_IDR_API_URL}?force=true&_t=${Date.now()}` : MY_USD_IDR_API_URL;
             const res = await fetch(targetUrl, {
                 signal: controller.signal,
-                headers: isForce ? { 'Cache-Control': 'no-cache' } : undefined
+                headers: isTransition ? { 'Cache-Control': 'no-cache, no-store' } : undefined
             });
 
             if (res.ok) {
