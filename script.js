@@ -353,7 +353,7 @@ function renderPriceChangeIndicator(el, current, previous) {
         : 'M7 7l10 10m0-9v9H8';
     const label = change > 0 ? 'Harga naik' : 'Harga turun';
     const direction = change > 0 ? 'price-change-up' : 'price-change-down';
-    const formattedChange = formatRupiah(Math.abs(change));
+    const formattedChange = `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
     el.innerHTML = `
         <svg class="price-change-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
@@ -583,51 +583,56 @@ function simulateFromHistory(type, price, updatedTime) {
         if (isBuy) {
             const markedGram = floor4(SIMULATION_BUY_BASE / price);
             const currentGram = floor4(SIMULATION_SELL_BASE / hSell);
-            gramDiff = markedGram - currentGram;
-            profitLoss = gramDiff * hSell;
+            gramDiff = floor4(markedGram - currentGram);
+            const nilaiJual = markedGram * hSell;
+            profitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
         } else {
             const markedGram = floor4(SIMULATION_SELL_BASE / price);
             const currentGram = floor4(SIMULATION_BUY_BASE / hBuy);
-            gramDiff = currentGram - markedGram;
-            profitLoss = gramDiff * hSell;
+            gramDiff = floor4(currentGram - markedGram);
+            profitLoss = Math.round(gramDiff * hSell);
         }
 
         profitHistoryEntries.push({
-            profitLoss: Math.round(profitLoss),
-            gramDiff: floor4(gramDiff),
-            time: formatTimeIdHms(hDate),
+            profitLoss: profitLoss,
+            gramDiff: gramDiff,
+            time: formatMinuteOnly(hDate),
             timestamp: hTimeMs
         });
     }
 
-    // Masukkan data harga saat ini (live) jika ada
-    const liveBuy = Number(state.currentBuy);
-    const liveSell = Number(state.currentSell);
-    if (Number.isFinite(liveBuy) && Number.isFinite(liveSell) && liveBuy > 0 && liveSell > 0) {
-        let liveProfitLoss = 0;
-        let liveGramDiff = 0;
-        if (isBuy) {
-            const markedGram = floor4(SIMULATION_BUY_BASE / price);
-            const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
-            liveGramDiff = markedGram - currentGram;
-            liveProfitLoss = liveGramDiff * liveSell;
-        } else {
-            const markedGram = floor4(SIMULATION_SELL_BASE / price);
-            const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
-            liveGramDiff = currentGram - markedGram;
-            liveProfitLoss = liveGramDiff * liveSell;
+    // Jika riwayat harga kosong sama sekali, buat entri awal dari harga live saat ini
+    if (profitHistoryEntries.length === 0) {
+        const liveBuy = Number(state.currentBuy);
+        const liveSell = Number(state.currentSell);
+        if (Number.isFinite(liveBuy) && Number.isFinite(liveSell) && liveBuy > 0 && liveSell > 0) {
+            let liveProfitLoss = 0;
+            let liveGramDiff = 0;
+            if (isBuy) {
+                const markedGram = floor4(SIMULATION_BUY_BASE / price);
+                const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
+                liveGramDiff = floor4(markedGram - currentGram);
+                const nilaiJual = markedGram * liveSell;
+                liveProfitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
+            } else {
+                const markedGram = floor4(SIMULATION_SELL_BASE / price);
+                const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
+                liveGramDiff = floor4(currentGram - markedGram);
+                liveProfitLoss = Math.round(liveGramDiff * liveSell);
+            }
+            profitHistoryEntries.push({
+                profitLoss: liveProfitLoss,
+                gramDiff: liveGramDiff,
+                time: formatMinuteOnly(new Date()),
+                timestamp: Date.now()
+            });
         }
-        profitHistoryEntries.push({
-            profitLoss: Math.round(liveProfitLoss),
-            gramDiff: floor4(liveGramDiff),
-            time: formatTimeIdHms(new Date()),
-            timestamp: Date.now()
-        });
     }
 
     state.simulation.profitHistory = dedupeProfitHistory(profitHistoryEntries);
+    saveSimulationToStorage();
 
-    updateSimulation();
+    updateSimulation(true);
     // Tutup dropdown setelah memilih
     togglePriceHistoryDropdown(type, false);
     // Scroll ke area simulasi
@@ -2128,10 +2133,16 @@ function buildSimulationTemplate(mode) {
                 </div>
                 <p data-slot="profitLoss" class="text-lg font-bold font-numeric">-</p>
 
-                <div data-slot="profitHistoryDropdown" class="price-history-dropdown price-history-dropdown-right price-history-dropdown-up hidden">
+                <div data-slot="profitHistoryDropdown" class="price-history-dropdown profit-history-dropdown price-history-dropdown-right price-history-dropdown-up hidden">
                     <div class="price-history-heading">
                         <span class="font-semibold text-gray-800 dark:text-gray-200">Riwayat Profit / Loss</span>
                         <span data-slot="profitHistoryCount" class="text-xxs font-normal text-gray-500 dark:text-gray-400">0 data</span>
+                    </div>
+                    <div class="profit-history-subheader font-numeric">
+                        <span>Menit</span>
+                        <span class="text-right">Selisih Gram</span>
+                        <span class="text-right">Profit / Loss</span>
+                        <span class="text-right">Perubahan</span>
                     </div>
                     <div data-slot="profitHistoryList" class="price-history-list">
                         <p class="price-history-empty">Menunggu pergerakan harga...</p>
@@ -2351,7 +2362,7 @@ function dedupeProfitHistory(history) {
         seenMinutes.set(minuteKey, {
             profitLoss: Math.round(profitLoss),
             gramDiff: floor4(gramDiff),
-            time: item.time || formatTimeIdHms(dateObj),
+            time: formatMinuteOnly(dateObj),
             timestamp: dateObj.getTime()
         });
     }
@@ -2369,7 +2380,7 @@ function addSimulationProfitHistoryEntry(mode, profitLoss, gramDiff) {
 
     const history = state.simulation.profitHistory;
     const now = Date.now();
-    const timeStr = formatTimeIdHms(new Date(now));
+    const timeStr = formatMinuteOnly(new Date(now));
 
     const newHistory = dedupeProfitHistory([...history, {
         profitLoss: Math.round(profitLoss),
@@ -2456,11 +2467,19 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
             const nextOlder = reversed[index + 1];
             const value = Number(item[valueKey]);
             const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
+            const gramDiff = Number(item.gramDiff) || 0;
 
             const isPositiveValue = value >= 0;
             const valueColorClass = isPositiveValue
                 ? 'text-green-600 dark:text-green-400'
                 : 'text-red-600 dark:text-red-400';
+
+            const gramDiffColorClass = gramDiff > 0
+                ? 'text-green-600 dark:text-green-400'
+                : gramDiff < 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-500 dark:text-gray-400';
+            const formattedGramDiff = `${gramDiff > 0 ? '+' : ''}${gramDiff.toFixed(4)} g`;
 
             const directionClass = change > 0
                 ? 'usd-idr-history-pill-up'
@@ -2474,12 +2493,14 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
                     ? 'M7 7l10 10m0-9v9H8'
                     : 'M6 12h12';
 
-            const formattedChange = change === 0 ? formatRupiah(0) : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+            const formattedChange = change === 0 ? 'Rp 0' : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+            const formattedValue = value === 0 ? formatRupiah(0) : (value > 0 ? `+${formatRupiah(value)}` : formatRupiah(value));
 
             return `
-            <div class="price-history-item">
+            <div class="profit-history-item">
                 <span class="price-history-time font-numeric">${item.time}</span>
-                <span class="price-history-price font-numeric ${valueColorClass}">${formatRupiah(value)}</span>
+                <span class="profit-history-gram font-numeric ${gramDiffColorClass}" title="Selisih Gram">${formattedGramDiff}</span>
+                <span class="profit-history-price font-numeric ${valueColorClass}">${formattedValue}</span>
                 <span class="usd-idr-history-pill ${directionClass} font-numeric" title="Perubahan dibanding menit sebelumnya">
                     <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
@@ -2496,7 +2517,7 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
     }
 }
 
-function updateSimulation() {
+function updateSimulation(skipAddHistory = false) {
     if (!dom.simulationResults) return;
 
     const buy = Number(state.currentBuy);
@@ -2526,13 +2547,18 @@ function updateSimulation() {
         const markedGram = floor4(SIMULATION_BUY_BASE / state.simulation.buyPrice);
         state.simulation.gram = markedGram;
         const currentGram = floor4(SIMULATION_SELL_BASE / sell);
-        const gramDiff = markedGram - currentGram;
-        const profitLoss = gramDiff * sell;
+        const gramDiff = floor4(markedGram - currentGram);
+        const nilaiJual = markedGram * sell;
+        const profitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
 
         saveSimulationToStorage();
         const node = ensureSimulationNode('buy');
         updateSimulationCardValues('buy', node, markedGram, currentGram, gramDiff, profitLoss);
-        addSimulationProfitHistoryEntry('buy', profitLoss, gramDiff);
+        if (!skipAddHistory) {
+            addSimulationProfitHistoryEntry('buy', profitLoss, gramDiff);
+        } else {
+            renderProfitHistoryDropdown('buy');
+        }
 
         if (dom.simulationStatus) {
             updateSimulationStatus('buy');
@@ -2543,12 +2569,16 @@ function updateSimulation() {
         const markedGram = floor4(SIMULATION_SELL_BASE / state.simulation.sellPrice);
         state.simulation.gram = markedGram;
         const currentGram = floor4(SIMULATION_BUY_BASE / buy);
-        const gramDiff = currentGram - markedGram;
-        const profitLoss = gramDiff * sell;
+        const gramDiff = floor4(currentGram - markedGram);
+        const profitLoss = Math.round(gramDiff * sell);
         saveSimulationToStorage();
         const node = ensureSimulationNode('sell');
         updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
-        addSimulationProfitHistoryEntry('sell', profitLoss, gramDiff);
+        if (!skipAddHistory) {
+            addSimulationProfitHistoryEntry('sell', profitLoss, gramDiff);
+        } else {
+            renderProfitHistoryDropdown('sell');
+        }
 
         if (dom.simulationStatus) {
             updateSimulationStatus('sell');
@@ -2617,7 +2647,7 @@ function loadSimulationFromStorage() {
                     const buy = Number(state.currentBuy);
                     const sell = Number(state.currentSell);
                     if (buy > 0 && sell > 0) {
-                        updateSimulation();
+                        updateSimulation(true);
                     }
                 }, 500);
 

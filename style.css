@@ -586,6 +586,65 @@ body {
     font-size: 0.75rem;
 }
 
+/* Khusus Dropdown & Item Riwayat Profit / Loss (4 Kolom: Menit, Selisih Gram, Profit/Loss, Perubahan) */
+.profit-history-dropdown {
+    width: min(24.5rem, 94vw);
+}
+
+.profit-history-subheader {
+    display: grid;
+    grid-template-columns: 2.8rem 5.2rem 6.4rem 1fr;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+    border-bottom: var(--border-light);
+    background: #f8fafc;
+}
+
+.dark .profit-history-subheader {
+    color: #94a3b8;
+    background: rgba(15, 23, 42, 0.5);
+    border-bottom: var(--border-dark);
+}
+
+.profit-history-item {
+    display: grid;
+    grid-template-columns: 2.8rem 5.2rem 6.4rem 1fr;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.45rem;
+    color: #111827;
+    font-size: 0.72rem;
+}
+
+.profit-history-item:hover {
+    background: #f8fafc;
+}
+
+.dark .profit-history-item {
+    color: #f8fafc;
+}
+
+.dark .profit-history-item:hover {
+    background: rgba(51, 65, 85, 0.72);
+}
+
+.profit-history-gram {
+    text-align: right;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.profit-history-price {
+    font-weight: 700;
+    text-align: right;
+    font-size: 0.72rem;
+}
+
 .price-history-item:hover {
     background: #f8fafc;
 }
