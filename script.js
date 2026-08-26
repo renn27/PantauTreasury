@@ -113,8 +113,14 @@ let state = {
         buy: null,
         sell: null
     },
-    previewTimeout: null
+    previewTimeout: null,
+    serverTimeOffset: 0
 };
+
+/* ================= SERVER TIME SYNCHRONIZATION ================= */
+function getServerNow() {
+    return new Date(Date.now() + (state.serverTimeOffset || 0));
+}
 
 /* ================= DOM CACHE ================= */
 const dom = {};
@@ -1875,6 +1881,8 @@ async function fetchHarga(force = false) {
                         const parsedTime = new Date(json.timestamp);
                         if (!Number.isNaN(parsedTime.getTime())) {
                             referenceTime = parsedTime;
+                            const roundtrip = Math.max(0, Date.now() - start);
+                            state.serverTimeOffset = (parsedTime.getTime() + Math.round(roundtrip / 2)) - Date.now();
                         }
                     }
 
@@ -1935,6 +1943,8 @@ async function fetchHarga(force = false) {
                 const parsedHeaderDate = new Date(serverDateHeader);
                 if (!Number.isNaN(parsedHeaderDate.getTime())) {
                     referenceTime = parsedHeaderDate;
+                    const roundtrip = Math.max(0, Date.now() - start);
+                    state.serverTimeOffset = (parsedHeaderDate.getTime() + Math.round(roundtrip / 2)) - Date.now();
                 }
             }
         }
@@ -2770,8 +2780,18 @@ function startTimers() {
 }
 
 function tickTimers() {
+    const serverNow = getServerNow();
+    const serverSeconds = serverNow.getSeconds();
+
     if (state.countdown > 0) {
         state.countdown--;
+        if (!document.hidden) updateCountdownDisplay();
+    }
+
+    // Auto-sinkronisasi countdown dengan detik server jika ada pergeseran > 1 detik
+    const expectedCountdown = serverSeconds === 0 ? 60 : 60 - serverSeconds;
+    if (Math.abs(state.countdown - expectedCountdown) > 1) {
+        state.countdown = expectedCountdown;
         if (!document.hidden) updateCountdownDisplay();
     }
 
@@ -2784,8 +2804,9 @@ function tickTimers() {
         }
     }
 
-    if (!state.isFetching && new Date().getSeconds() === 1) {
-        debugLog('Auto-fetch detik 1');
+    // Auto-fetch tepat di detik ke-1 berdasarkan waktu server Treasury
+    if (!state.isFetching && serverSeconds === 1) {
+        debugLog(`Auto-fetch detik 1 (Waktu Server: ${formatTimeIdHms(serverNow)})`);
 
         state.isAutoFetching = true;
         state.isRetrying = true;
