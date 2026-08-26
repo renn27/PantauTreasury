@@ -8,7 +8,7 @@ const REQUEST_HEADERS = {
 const FETCH_HEADERS = new Headers(REQUEST_HEADERS);
 
 /* ================= NAMED CONSTANTS ================= */
-const FETCH_TIMEOUT_MS = 5000;
+const FETCH_TIMEOUT_MS = 7000;
 const CACHE_LOCAL_TTL_MS = 30000;
 const SIMULATION_TTL_MS = 86400000; // 24 jam
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
@@ -16,7 +16,6 @@ const SIMULATION_BUY_BASE = 60000000;
 const SIMULATION_SELL_BASE = 58005000;
 const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
-const COUNTDOWN_SECONDS = 60;
 const PRICE_HISTORY_LIMIT = 30;
 const MY_USD_IDR_WS_URL = '';
 const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index'; 
@@ -151,17 +150,37 @@ const formatTimeIdHm = new Intl.DateTimeFormat('id-ID', {
 
 function formatMinuteOnly(val) {
     if (!val) return '-';
+    
     if (typeof val === 'string') {
-        const timePart = val.includes(' ') ? val.split(' ')[1] : val;
-        const parts = timePart.split(/[:.]/);
-        if (parts.length >= 2) {
-            return `${parts[0]}.${parts[1]}`;
+        const trimmed = val.trim();
+        // Cek jika sudah berupa jam dan menit saja (contoh: "20.29" atau "20:29")
+        if (/^\d{1,2}[:.]\d{2}$/.test(trimmed)) {
+            return trimmed.replace(':', '.');
+        }
+        // Cek jika hanya string waktu jam.menit.detik (contoh: "20:29:01" atau "20.29.01")
+        if (/^\d{1,2}[:.]\d{2}[:.]\d{2}$/.test(trimmed)) {
+            const p = trimmed.split(/[:.]/);
+            return `${p[0].padStart(2, '0')}.${p[1]}`;
         }
     }
-    const d = val instanceof Date ? val : new Date(val);
-    if (!Number.isNaN(d.getTime())) {
-        return formatTimeIdHm(d);
+
+    // Parsing Date (menangani ISO String seperti "2026-08-26T13:29:01.000Z", timestamp ms, dll)
+    let d = null;
+    if (val instanceof Date) {
+        d = val;
+    } else if (typeof val === 'number') {
+        d = new Date(val);
+    } else if (typeof val === 'string') {
+        d = new Date(val);
+        if (Number.isNaN(d.getTime()) && val.includes(' ')) {
+            d = new Date(val.replace(' ', 'T'));
+        }
     }
+
+    if (d && !Number.isNaN(d.getTime())) {
+        return formatTimeIdHm(d).replace(':', '.');
+    }
+
     return String(val);
 }
 
@@ -196,10 +215,9 @@ renderPriceHistoryDropdown('sell');
 attachPriceHistoryClickDelegation(dom.buyPriceHistoryList, 'buy');
 attachPriceHistoryClickDelegation(dom.sellPriceHistoryList, 'sell');
 renderCachedData();
-// Fetch fresh data immediately (starts network request parallel to DOM Ready parsing)
+// Fetch fresh data immediately (starts single unified network request parallel to DOM Ready parsing)
 fetchHarga();
 renderCachedUsdIdr();
-connectUsdIdrFeed();
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
@@ -1046,6 +1064,12 @@ async function connectUsdIdrFeed() {
     try {
         debugLog('Mengambil data dari REST API...');
         const res = await fetch(MY_USD_IDR_API_URL);
+        if (res.status === 304) {
+            debugLog('USD/IDR data 304 Not Modified (cached via ETag)');
+            setBackendConnectionStatus(true, 'Backend Vercel: Online');
+            scheduleUsdIdrPoll();
+            return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -1878,6 +1902,7 @@ async function fetchHarga(force = false) {
                     }
 
                     setBackendConnectionStatus(true, 'Backend Vercel: Online');
+                    scheduleUsdIdrPoll();
                 }
             }
         } catch (backendErr) {
