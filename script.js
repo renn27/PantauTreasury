@@ -55,14 +55,14 @@ const priceCache = {
     }
 };
 
-// Load from localStorage
+// Load from localStorage (Instant Hydration)
 try {
     const saved = localStorage.getItem('gold_cache');
     if (saved) {
         const parsed = JSON.parse(saved);
-        if (Date.now() - parsed.timestamp < CACHE_LOCAL_TTL_MS) {
+        if (parsed && parsed.data) {
             priceCache.data = parsed.data;
-            priceCache.timestamp = parsed.timestamp;
+            priceCache.timestamp = parsed.timestamp || 0;
         }
     }
 } catch (e) { }
@@ -1376,7 +1376,7 @@ function scheduleRetry(reason) {
     if (!state.isAutoFetching) return;
 
     // Tentukan batas maksimal retry berdasarkan alasan
-    const maxRetry = reason === 'stale-data' ? 12 : state.MAX_RETRY;
+    const maxRetry = reason === 'stale-data' ? 18 : state.MAX_RETRY;
     state.activeMaxRetry = maxRetry;
 
     if (state.retryCount >= maxRetry) {
@@ -1394,13 +1394,16 @@ function scheduleRetry(reason) {
     // Tentukan jeda retry berdasarkan alasan
     let delay;
     if (reason === 'stale-data') {
-        // Percobaan 1 & 2 ultra-cepat (500ms), 3 & 4 (800ms) agar langsung menangkap data rilis Treasury secepat mungkin
+        // Percobaan 1 & 2 ultra-cepat (500ms), 3 & 4 (800ms), 5-10 (1500ms), 11-18 (2000ms)
+        // Memastikan cakupan penuh hingga detik ke-28 jika server Treasury mengalami delay rilis
         if (state.retryCount <= 2) {
             delay = 500;
         } else if (state.retryCount <= 4) {
             delay = 800;
-        } else {
+        } else if (state.retryCount <= 10) {
             delay = 1500;
+        } else {
+            delay = 2000;
         }
     } else {
         // Untuk timeout/error, gunakan exponential backoff cepat
@@ -1420,7 +1423,7 @@ function scheduleRetry(reason) {
 
 /* ================= RENDER CACHED DATA INSTANTLY ================= */
 function renderCachedData() {
-    const cached = priceCache.get();
+    const cached = priceCache.data || priceCache.get();
     if (!cached || !dom.hargaBeli) return false;
 
     debugLog('Rendering cached data');
@@ -2043,9 +2046,23 @@ async function fetchHarga(force = false) {
             });
 
             if (res.status === 304) {
-                const cached = priceCache.get();
+                const cached = priceCache.data || priceCache.get();
                 if (cached) {
                     result = cached;
+                    priceCache.timestamp = Date.now();
+                    const serverDateHeader = res.headers.get('Date');
+                    if (serverDateHeader) {
+                        const parsedHeaderDate = new Date(serverDateHeader);
+                        if (!Number.isNaN(parsedHeaderDate.getTime())) {
+                            referenceTime = parsedHeaderDate;
+                            const roundtrip = Math.max(0, Date.now() - start);
+                            state.serverTimeOffset = (parsedHeaderDate.getTime() + Math.round(roundtrip / 2)) - Date.now();
+                            try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
+                            updateServerClock(getServerNow());
+                        }
+                    } else {
+                        referenceTime = getServerNow();
+                    }
                     setBackendConnectionStatus(true, 'Backend Vercel: Online');
                     scheduleUsdIdrPoll();
                 }
@@ -2215,7 +2232,7 @@ async function fetchHarga(force = false) {
 
         console.error('Fetch error:', err);
 
-        if (dom.lastUpdate) {
+        if (dom.lastUpdate && (!state.isRetrying || state.retryCount >= (state.activeMaxRetry || state.MAX_RETRY))) {
             dom.lastUpdate.textContent = 'Fetch error';
         }
 
@@ -3013,9 +3030,9 @@ function tickTimers() {
 
     // Pre-fire auto-fetch pada detik 00.75s - 00.8s di menit baru
     // Menembak sedikit lebih awal agar paket request tiba di server Treasury tepat di detik 01.0s saat database mereka rilis
-    // Toleransi hingga detik 15 agar tidak pernah terlewat jika terjadi background throttling
+    // Toleransi hingga detik 30 agar tidak pernah terlewat jika terjadi background throttling
     const isNewMinute = state.lastAutoFetchMinute !== currentMinuteBucket;
-    const isPreFireWindow = (serverSeconds === 0 && serverMs >= 750) || (serverSeconds >= 1 && serverSeconds <= 15);
+    const isPreFireWindow = (serverSeconds === 0 && serverMs >= 750) || (serverSeconds >= 1 && serverSeconds <= 30);
 
     if (isNewMinute && isPreFireWindow && !state.isFetching) {
         state.lastAutoFetchMinute = currentMinuteBucket;

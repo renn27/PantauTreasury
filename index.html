@@ -58,10 +58,26 @@
                     <!-- ROW 1: Header Time & Controls -->
                     <div class="dashboard-header-row grid grid-cols-3 h-24 gap-2">
                         <!-- WAKTU RESMI SERVER TREASURY (WIB) NATIVE BESAR FULL -->
-                        <div class="header-time-col">
-                            <div class="glass-card rounded-lg h-full card-hover card-elevated flex flex-col items-center justify-center relative overflow-hidden select-none px-2 pt-2.5 pb-2" title="Waktu Resmi Server Treasury (WIB)">
-                                <span id="serverClockDate" class="text-gray-500 dark:text-gray-400 select-none text-center truncate w-full" style="font-size: 9.5px; font-weight: 600; line-height: 1; letter-spacing: 0.02em; margin-bottom: 2px;">-</span>
-                                <span id="serverClockHms" class="font-black font-numeric text-gray-900 dark:text-gray-100 leading-none text-center select-none" style="font-size: clamp(2.35rem, 3.1vw, 2.85rem); font-weight: 900; letter-spacing: 0.02em;">--:--:--</span>
+                        <div class="header-time-col h-full">
+                            <div class="glass-card rounded-lg p-2 card-hover card-elevated h-full flex flex-col justify-between select-none" style="container-type: inline-size;" title="Waktu Resmi Server Treasury (WIB)">
+                                <div class="flex-1 flex flex-col justify-between py-0.5">
+                                    <!-- Header Date posisi & ukuran SAMA PERSIS dan SEJAJAR dengan Update Terakhir -->
+                                    <div class="update-info-heading">
+                                        <span class="update-info-icon">
+                                            <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                        </span>
+                                        <p id="serverClockDate" class="update-info-label text-xs font-medium truncate">
+                                            -
+                                        </p>
+                                    </div>
+
+                                    <!-- Angka Jam Besar, Tebal, dan Responsif Bebas Overflow -->
+                                    <div class="flex-1 flex items-center justify-center w-full">
+                                        <span id="serverClockHms" class="font-black font-numeric text-gray-900 dark:text-gray-100 leading-none text-center select-none" style="font-size: clamp(2.35rem, 17cqw, 3.12rem); line-height: 0.95; font-weight: 900; letter-spacing: 0.015em; -webkit-text-stroke: 0.45px currentColor;">--:--:--</span>
+                                    </div>
+                                </div>
                                 <span id="serverClockOffset" class="hidden">Akurat</span>
                             </div>
                         </div>
