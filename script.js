@@ -68,6 +68,12 @@ try {
 } catch (e) { }
 
 /* ================= GLOBAL STATE ================= */
+let savedServerOffset = 0;
+try {
+    const saved = localStorage.getItem('server_time_offset');
+    if (saved) savedServerOffset = Number(saved) || 0;
+} catch (e) { }
+
 let state = {
     timerTicker: null,
     fetchController: null,
@@ -111,7 +117,7 @@ let state = {
         sell: null
     },
     previewTimeout: null,
-    serverTimeOffset: 0,
+    serverTimeOffset: savedServerOffset,
     lastAutoFetchMinute: null
 };
 
@@ -194,7 +200,8 @@ const ids = [
     'refreshApiBtn', 'themeText', 'bigRefreshBtn',
     'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
     'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
-    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'installPwaBtn', 'timeIframe', 'tvIframe',
+    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'installPwaBtn', 'tvIframe',
+    'serverClockHms', 'serverClockDate', 'serverClockOffset',
     'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
     'manualBuyPricePreview', 'manualSellPricePreview',
     'openManualGramModalBtn', 'manualGramModal', 'manualGramModalBackdrop', 'closeManualGramModalBtn', 'manualGramModalContent',
@@ -216,6 +223,10 @@ renderPriceHistoryDropdown('sell');
 attachPriceHistoryClickDelegation(dom.buyPriceHistoryList, 'buy');
 attachPriceHistoryClickDelegation(dom.sellPriceHistoryList, 'sell');
 renderCachedData();
+// Tampilkan jam server langsung di frame pertama
+updateServerClock(getServerNow());
+// Mulai timer live clock
+startTimers();
 // Fetch fresh data immediately (starts single unified network request parallel to DOM Ready parsing)
 fetchHarga();
 renderCachedUsdIdr();
@@ -1870,9 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Other buttons
     dom.refreshIframeBtn?.addEventListener('click', () => {
-        const timeIframe = dom.timeIframe;
         const tvIframe = dom.tvIframe;
-        if (timeIframe) timeIframe.src = timeIframe.src;
         if (tvIframe) tvIframe.src = tvIframe.src;
     });
 
@@ -2056,6 +2065,8 @@ async function fetchHarga(force = false) {
                             referenceTime = parsedTime;
                             const roundtrip = Math.max(0, Date.now() - start);
                             state.serverTimeOffset = (parsedTime.getTime() + Math.round(roundtrip / 2)) - Date.now();
+                            try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
+                            updateServerClock(getServerNow());
                         }
                     }
 
@@ -2126,6 +2137,8 @@ async function fetchHarga(force = false) {
                     referenceTime = parsedHeaderDate;
                     const roundtrip = Math.max(0, Date.now() - start);
                     state.serverTimeOffset = (parsedHeaderDate.getTime() + Math.round(roundtrip / 2)) - Date.now();
+                    try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
+                    updateServerClock(getServerNow());
                 }
             }
         }
@@ -2995,6 +3008,9 @@ function tickTimers() {
     const serverMs = serverNow.getMilliseconds();
     const currentMinuteBucket = Math.floor(serverNow.getTime() / 60000);
 
+    // Update tampilan jam digital native server Treasury
+    updateServerClock(serverNow);
+
     // Pre-fire auto-fetch pada detik 00.75s - 00.8s di menit baru
     // Menembak sedikit lebih awal agar paket request tiba di server Treasury tepat di detik 01.0s saat database mereka rilis
     // Toleransi hingga detik 15 agar tidak pernah terlewat jika terjadi background throttling
@@ -3012,6 +3028,39 @@ function tickTimers() {
         clearRetryTimeout();
 
         fetchHarga();
+    }
+}
+
+/* ================= NATIVE TREASURY SERVER CLOCK ================= */
+function updateServerClock(serverNow) {
+    if (!dom.serverClockHms) return;
+
+    const hours = String(serverNow.getHours()).padStart(2, '0');
+    const minutes = String(serverNow.getMinutes()).padStart(2, '0');
+    const seconds = String(serverNow.getSeconds()).padStart(2, '0');
+    const timeStr = `${hours}:${minutes}:${seconds}`;
+
+    if (dom.serverClockHms.textContent !== timeStr) {
+        dom.serverClockHms.textContent = timeStr;
+    }
+
+    if (dom.serverClockDate) {
+        const dayKey = `${serverNow.getFullYear()}-${serverNow.getMonth()}-${serverNow.getDate()}`;
+        if (state._lastClockDayKey !== dayKey) {
+            state._lastClockDayKey = dayKey;
+            const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            dom.serverClockDate.textContent = `${dayNames[serverNow.getDay()]}, ${serverNow.getDate()} ${monthNames[serverNow.getMonth()]}`;
+        }
+    }
+
+    if (dom.serverClockOffset) {
+        const offsetSec = Math.round((state.serverTimeOffset || 0) / 1000);
+        const text = Math.abs(offsetSec) >= 1 ? `Sync (${offsetSec > 0 ? '+' : ''}${offsetSec}s)` : 'Akurat';
+        if (dom.serverClockOffset.textContent !== text) {
+            dom.serverClockOffset.textContent = text;
+            dom.serverClockOffset.title = `Terkoreksi ${offsetSec > 0 ? '+' : ''}${offsetSec} detik dari jam internal perangkat untuk memastikan 100% presisi dengan rilis harga Treasury.`;
+        }
     }
 }
 

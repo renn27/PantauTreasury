@@ -14,8 +14,6 @@
     <link rel="dns-prefetch" href="https://susdidr.vercel.app">
     <link rel="preconnect" href="https://s.tradingview.com">
     <link rel="dns-prefetch" href="https://s.tradingview.com">
-    <link rel="preconnect" href="https://time.is">
-    <link rel="dns-prefetch" href="https://time.is">
 
     <!-- PWA & Mobile Web App Meta -->
     <link rel="manifest" href="manifest.json">
@@ -26,8 +24,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20260905125500">
-    <link rel="stylesheet" href="style.css?v=20260905125500">
+    <link rel="stylesheet" href="tailwind.css?v=20260905133000">
+    <link rel="stylesheet" href="style.css?v=20260905133000">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -59,12 +57,23 @@
                 <div id="leftPanel" class="dashboard-main-panel col-span-3 flex flex-col">
                     <!-- ROW 1: Header Time & Controls -->
                     <div class="dashboard-header-row grid grid-cols-3 h-24 gap-2">
-                        <!-- TIME.IS iframe -->
+                        <!-- WAKTU RESMI SERVER TREASURY (WIB) NATIVE -->
                         <div class="header-time-col">
-                            <div class="glass-card rounded-lg overflow-hidden relative h-full card-hover card-elevated">
-                                <iframe id="timeIframe" src="https://time.is/Jakarta" loading="lazy"
-                                    class="absolute top-[-180%] left-1/2 w-[145%] h-[190%] -translate-x-1/2 translate-y-[50%]"
-                                    title="Waktu Jakarta"></iframe>
+                            <div class="glass-card rounded-lg p-2 sm:p-2.5 h-full card-hover card-elevated flex flex-col justify-between select-none">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
+                                        <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">Waktu Server</span>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-numeric uppercase tracking-wider">WIB</span>
+                                </div>
+                                <div class="my-auto flex items-baseline justify-center">
+                                    <span id="serverClockHms" class="text-2xl sm:text-3xl font-black font-numeric tracking-tight text-gray-900 dark:text-gray-100">--:--:--</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xxs text-gray-500 dark:text-gray-400 font-medium">
+                                    <span id="serverClockDate" class="truncate">-</span>
+                                    <span id="serverClockOffset" class="font-numeric text-[10px] text-emerald-600 dark:text-emerald-400" title="Sinkronisasi akurat dengan jam atom server Treasury">Akurat</span>
+                                </div>
                             </div>
                         </div>
 
@@ -707,7 +716,7 @@
 
 
     <!-- Script -->
-    <script src="script.js?v=20260905125500" defer></script>
+    <script src="script.js?v=20260905133000" defer></script>
 </body>
 
 </html>
