@@ -13,13 +13,13 @@ const CACHE_LOCAL_TTL_MS = 30000;
 const SIMULATION_TTL_MS = 86400000; // 24 jam
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
 const SIMULATION_BUY_BASE = 60000000;
-const SIMULATION_SELL_BASE = 58005000;
+const SIMULATION_SELL_BASE = 58006500;
 const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const PRICE_HISTORY_LIMIT = 30;
 const MY_USD_IDR_WS_URL = '';
-const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index'; 
-const USD_IDR_POLL_MS = 6 * 1000; 
+const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index';
+const USD_IDR_POLL_MS = 6 * 1000;
 const DEBUG = false;
 
 /* ================= INSTANT LOAD ================= */
@@ -154,10 +154,14 @@ const formatTimeIdHm = new Intl.DateTimeFormat('id-ID', {
     minute: '2-digit',
     hour12: false
 }).format;
+const formatUsdIdrRate = new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
+}).format;
 
 function formatMinuteOnly(val) {
     if (!val) return '-';
-    
+
     if (typeof val === 'string') {
         const trimmed = val.trim();
         // Cek jika sudah berupa jam dan menit saja (contoh: "20.29" atau "20:29")
@@ -209,7 +213,7 @@ const ids = [
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
-    'backendStatusDot'
+    'backendStatusDot', 'backendVersionBadge'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
@@ -225,10 +229,7 @@ attachPriceHistoryClickDelegation(dom.sellPriceHistoryList, 'sell');
 renderCachedData();
 // Tampilkan jam server langsung di frame pertama
 updateServerClock(getServerNow());
-// Mulai timer live clock
-startTimers();
-// Fetch fresh data immediately (starts single unified network request parallel to DOM Ready parsing)
-fetchHarga();
+// startTimers() dan initial fetch diorkestrasi di DOMContentLoaded untuk mencegah race condition & double fetch
 renderCachedUsdIdr();
 
 function debugLog(...args) {
@@ -336,7 +337,7 @@ function renderPriceValue(el, current, previous) {
 
     el.classList.remove('price-roll-up', 'price-roll-down');
     card?.classList.remove('price-card-rise', 'price-card-fall');
-    
+
     requestAnimationFrame(() => {
         el.classList.add(rollClass);
         card?.classList.add(cardClass);
@@ -346,7 +347,7 @@ function renderPriceValue(el, current, previous) {
 function getPreviousDistinctPrice(type, currentPrice) {
     const history = state.priceHistory || [];
     const valueKey = type === 'buy' ? 'buy' : 'sell';
-    
+
     // Scan backward to find the first price that is different from currentPrice
     for (let i = history.length - 1; i >= 0; i--) {
         const val = Number(history[i][valueKey]);
@@ -467,7 +468,13 @@ function addPriceHistoryEntry(data) {
         updated: dateParsed.toISOString()
     }]);
 
-    if (JSON.stringify(newHistory) === JSON.stringify(currentHistory)) {
+    const isSame = newHistory.length === currentHistory.length &&
+        newHistory.length > 0 && currentHistory.length > 0 &&
+        newHistory[newHistory.length - 1].updated === currentHistory[currentHistory.length - 1].updated &&
+        newHistory[newHistory.length - 1].buy === currentHistory[currentHistory.length - 1].buy &&
+        newHistory[newHistory.length - 1].sell === currentHistory[currentHistory.length - 1].sell;
+
+    if (isSame) {
         return;
     }
 
@@ -729,12 +736,7 @@ function parseUsdIdrPrice(rawPrice) {
     return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function formatUsdIdrRate(value) {
-    return new Intl.NumberFormat('id-ID', {
-        minimumFractionDigits: 4,
-        maximumFractionDigits: 4
-    }).format(value);
-}
+// formatUsdIdrRate di-cache sebagai singleton di bagian FAST HELPER FUNCTIONS
 
 function parseTimestampToDate(val) {
     if (!val) return null;
@@ -768,8 +770,8 @@ function formatUsdIdrDisplayTime(time, rawTimestamp) {
     const now = typeof getServerNow === 'function' ? getServerNow() : new Date();
 
     const isToday = dateObj.getFullYear() === now.getFullYear() &&
-                    dateObj.getMonth() === now.getMonth() &&
-                    dateObj.getDate() === now.getDate();
+        dateObj.getMonth() === now.getMonth() &&
+        dateObj.getDate() === now.getDate();
 
     let displayStr = '';
     if (isToday) {
@@ -861,6 +863,16 @@ function setBackendConnectionStatus(isOnline, message = '') {
         dom.backendStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500 inline-block ml-1 shadow-sm animate-pulse';
         dom.backendStatusDot.title = message || 'Backend Vercel: Offline (Fallback Aktif)';
     }
+}
+
+function updateBackendVersionDisplay(version, commitSha) {
+    if (!version) return;
+    if (dom.backendVersionBadge) {
+        dom.backendVersionBadge.textContent = 'API ' + version;
+        dom.backendVersionBadge.style.display = 'inline-block';
+        dom.backendVersionBadge.title = `Backend Vercel: ${version}${commitSha ? ' (' + commitSha + ')' : ''}`;
+    }
+    setBackendConnectionStatus(true, `Backend Vercel: Online (${version}${commitSha ? ' - ' + commitSha : ''})`);
 }
 
 function renderUsdIdrChangeIndicator(current, previous) {
@@ -1183,7 +1195,7 @@ function setupUsdIdrWsHandlers(ws) {
         }
         if (state.usdIdrWs === ws) state.usdIdrWs = null;
         setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Reconnecting...' : 'Menghubungkan...');
-        
+
         // Coba hubungkan ulang setelah 5 detik
         state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, 5000);
     };
@@ -1224,10 +1236,13 @@ async function connectUsdIdrFeed() {
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        if (data && data.version) {
+            updateBackendVersionDisplay(data.version, data.commit_sha);
+        }
 
         // 1. Update USD/IDR
         const hasHistory = (data.usd_idr_history && Array.isArray(data.usd_idr_history) && data.usd_idr_history.length)
-                        || (data.history && Array.isArray(data.history) && data.history.length);
+            || (data.history && Array.isArray(data.history) && data.history.length);
 
         if (data.usd_idr_history && Array.isArray(data.usd_idr_history)) {
             renderUsdIdrHistory(data.usd_idr_history);
@@ -1596,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initialIsDark = document.documentElement.classList.contains('dark');
     updateThemeButtonText(initialIsDark);
-    
+
     // Defer TradingView iframe initialization to window load to prevent blocking initial paints and avoid double loading
     const initTradingViewIframe = () => {
         if (dom.tvIframe && !dom.tvIframe.getAttribute('src')) {
@@ -1682,7 +1697,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (price > 0) {
                 resetSimulationProfitHistory();
                 const currentPriceObj = priceCache.get();
-                const timeStr = currentPriceObj?.updated 
+                const timeStr = currentPriceObj?.updated
                     ? formatMinuteOnly(currentPriceObj.updated)
                     : formatMinuteOnly(getServerNow());
                 state.simulation.buyPrice = price;
@@ -1707,7 +1722,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (price > 0) {
                 resetSimulationProfitHistory();
                 const currentPriceObj = priceCache.get();
-                const timeStr = currentPriceObj?.updated 
+                const timeStr = currentPriceObj?.updated
                     ? formatMinuteOnly(currentPriceObj.updated)
                     : formatMinuteOnly(getServerNow());
                 state.simulation.sellPrice = price;
@@ -2068,6 +2083,9 @@ async function fetchHarga(force = false) {
                 }
             } else if (res.ok) {
                 const json = await res.json();
+                if (json && json.version) {
+                    updateBackendVersionDisplay(json.version, json.commit_sha);
+                }
                 if (json && json.gold && json.gold.buy && json.gold.sell) {
                     result = {
                         buy: Number(json.gold.buy),
@@ -2089,7 +2107,7 @@ async function fetchHarga(force = false) {
 
                     // Sinkronisasi data USD/IDR sekaligus
                     const hasUsdHistory = (json.usd_idr_history && Array.isArray(json.usd_idr_history) && json.usd_idr_history.length)
-                                       || (json.history && Array.isArray(json.history) && json.history.length);
+                        || (json.history && Array.isArray(json.history) && json.history.length);
 
                     if (json.usd_idr_history && Array.isArray(json.usd_idr_history)) {
                         renderUsdIdrHistory(json.usd_idr_history);
@@ -2498,7 +2516,7 @@ function applyManualGramSimulation(mode) {
     resetSimulationProfitHistory();
 
     const currentPriceObj = priceCache.get();
-    const timeStr = currentPriceObj?.updated 
+    const timeStr = currentPriceObj?.updated
         ? formatMinuteOnly(currentPriceObj.updated)
         : formatMinuteOnly(getServerNow());
 
@@ -2592,7 +2610,13 @@ function addSimulationProfitHistoryEntry(mode, profitLoss, gramDiff) {
         timestamp: now
     }]);
 
-    if (JSON.stringify(newHistory) === JSON.stringify(history)) {
+    const isSame = newHistory.length === history.length &&
+        newHistory.length > 0 && history.length > 0 &&
+        newHistory[newHistory.length - 1].timestamp === history[history.length - 1].timestamp &&
+        newHistory[newHistory.length - 1].profitLoss === history[history.length - 1].profitLoss &&
+        newHistory[newHistory.length - 1].gramDiff === history[history.length - 1].gramDiff;
+
+    if (isSame) {
         renderProfitHistoryDropdown(mode);
         return;
     }
@@ -2996,10 +3020,10 @@ function updateSimulationStatus(mode) {
     if (slots.priceDiff && buy > 0 && sell > 0) {
         const diff = isBuy ? (buy - price) : (price - sell);
         const formattedDiff = diff === 0 ? 'Rp 0' : (diff > 0 ? `+${formatRupiah(diff)}` : `-${formatRupiah(Math.abs(diff))}`);
-        
+
         slots.priceDiff.textContent = `(${formattedDiff})`;
         slots.priceDiff.classList.remove('text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400', 'text-gray-500', 'dark:text-gray-400');
-        
+
         if (diff > 0) {
             slots.priceDiff.classList.add('text-green-600', 'dark:text-green-400');
         } else if (diff < 0) {
@@ -3033,8 +3057,9 @@ function tickTimers() {
     // Toleransi hingga detik 30 agar tidak pernah terlewat jika terjadi background throttling
     const isNewMinute = state.lastAutoFetchMinute !== currentMinuteBucket;
     const isPreFireWindow = (serverSeconds === 0 && serverMs >= 750) || (serverSeconds >= 1 && serverSeconds <= 30);
+    const isInitialTick = state.lastAutoFetchMinute === null;
 
-    if (isNewMinute && isPreFireWindow && !state.isFetching) {
+    if ((isInitialTick || (isNewMinute && isPreFireWindow)) && !state.isFetching) {
         state.lastAutoFetchMinute = currentMinuteBucket;
         debugLog(`Pre-fire auto-fetch detik ${serverSeconds}.${Math.floor(serverMs / 100)}s (Waktu Server: ${formatTimeIdHms(serverNow)})`);
 

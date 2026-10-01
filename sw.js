@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v16';
+const CACHE_NAME = 'pantau-treasury-v17';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -44,24 +44,11 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(event.request.url);
 
-  // Network-First for API calls to ensure fresh prices online
-  if (requestUrl.hostname.includes('treasury.id') || requestUrl.pathname.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Hanya simpan cache untuk request stabil (tanpa parameter waktu acak _t)
-          if (response && response.status === 200 && !requestUrl.searchParams.has('_t')) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
-    );
+  // Network-Only untuk panggilan API agar harga selalu fresh dan tidak stale di cache SW
+  if (requestUrl.hostname.includes('vercel.app') ||
+      requestUrl.hostname.includes('treasury.id') ||
+      requestUrl.pathname.includes('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
