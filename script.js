@@ -956,6 +956,7 @@ function renderUsdIdrHistory(history) {
         .map(item => ({
             price: item?.price,
             time: item?.time,
+            market_time: item?.market_time || item?.time,
             updated_at: item?.updated_at,
             timestamp: item?.timestamp,
             value: parseUsdIdrPrice(item?.price)
@@ -968,15 +969,19 @@ function renderUsdIdrHistory(history) {
     let mergedHistory = normalizedHistory;
     if (state.usdIdrHistory && state.usdIdrHistory.length > 0) {
         const existingMap = new Map();
+        // Simpan riwayat berdasarkan time agar tidak ada duplikasi jam/detik yang sama di list
         state.usdIdrHistory.forEach(item => {
-            const key = `${item.price}-${item.updated_at || item.time || item.timestamp}`;
-            existingMap.set(key, item);
+            if (item && item.time) existingMap.set(item.time, item);
         });
         normalizedHistory.forEach(item => {
-            const key = `${item.price}-${item.updated_at || item.time || item.timestamp}`;
-            existingMap.set(key, item);
+            if (item && item.time) existingMap.set(item.time, item);
         });
         mergedHistory = Array.from(existingMap.values());
+        mergedHistory.sort((a, b) => {
+            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return timeA - timeB;
+        });
         if (mergedHistory.length > 20) {
             mergedHistory = mergedHistory.slice(-20);
         }
@@ -1039,8 +1044,12 @@ function renderUsdIdrHistoryDropdown(forceRender = false) {
                     : 'M6 12h12';
             const pillValue = change === 0 ? '0,0000' : formatUsdIdrRate(Math.abs(change));
 
+            const itemTitle = item.market_time && item.market_time !== item.time
+                ? `Waktu Server: ${item.time} WIB | Waktu Google Finance: ${item.market_time} WIB`
+                : `Waktu: ${item.time} WIB`;
+
             return `
-            <div class="usd-idr-history-item">
+            <div class="usd-idr-history-item" title="${itemTitle}">
                 <span class="usd-idr-history-time font-numeric">${item.time || '-'}</span>
                 <span class="usd-idr-history-price font-numeric">${formatUsdIdrRate(item.value)}</span>
                 <span class="usd-idr-history-pill ${directionClass} font-numeric">
@@ -1083,13 +1092,17 @@ function renderCachedUsdIdr() {
         const cached = JSON.parse(saved);
         if (!cached || !cached.price) return;
 
-        // Pulihkan riwayat kurs dari cache jika ada
+        // Pulihkan riwayat kurs dari cache jika ada (bersihkan duplikasi waktu lama)
         const savedHistory = localStorage.getItem('usd_idr_history_cache');
         if (savedHistory) {
             try {
                 const parsedHistory = JSON.parse(savedHistory);
                 if (Array.isArray(parsedHistory) && parsedHistory.length) {
-                    state.usdIdrHistory = parsedHistory;
+                    const uniqueMap = new Map();
+                    parsedHistory.forEach(item => {
+                        if (item && item.time) uniqueMap.set(item.time, item);
+                    });
+                    state.usdIdrHistory = Array.from(uniqueMap.values());
                     renderUsdIdrHistoryDropdown();
                 }
             } catch (err) { }
