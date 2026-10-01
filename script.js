@@ -1952,7 +1952,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start timers
     startTimers();
 
-    // Pause/resume timer saat tab hidden/visible
+    // Pause/resume timer dan TradingView suspend saat tab hidden/visible
+    let tvSuspendTimeoutId = null;
+    let savedTvSrc = null;
+
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             if (state.timerTicker) {
@@ -1960,7 +1963,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.timerTicker = null;
             }
             closeUsdIdrFeed();
+
+            // Suspend TradingView WebGL/WebSocket jika tablet tidur/terkunci > 90 detik (hemat baterai & RAM)
+            if (dom.tvIframe && dom.tvIframe.src && dom.tvIframe.src !== 'about:blank') {
+                tvSuspendTimeoutId = setTimeout(() => {
+                    if (document.hidden && dom.tvIframe) {
+                        savedTvSrc = dom.tvIframe.src;
+                        dom.tvIframe.src = 'about:blank';
+                        debugLog('TradingView suspended (hemat baterai & RAM tablet)');
+                    }
+                }, 90000);
+            }
         } else {
+            if (tvSuspendTimeoutId) {
+                clearTimeout(tvSuspendTimeoutId);
+                tvSuspendTimeoutId = null;
+            }
+
+            // Pulihkan TradingView jika sebelumnya di-suspend saat layar mati lama
+            if (dom.tvIframe && savedTvSrc && dom.tvIframe.src.includes('about:blank')) {
+                dom.tvIframe.src = savedTvSrc;
+                savedTvSrc = null;
+                debugLog('TradingView restored dengan memori bersih');
+            }
+
             if (!state.timerTicker) {
                 startTimers();
             }

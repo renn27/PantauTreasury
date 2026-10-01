@@ -1235,6 +1235,14 @@ body {
 .chart-container {
     border-radius: 0 0 12px 12px;
     overflow: hidden;
+    contain: layout paint size;
+}
+
+#tvIframe {
+    contain: layout paint size;
+    transform: translateZ(0);
+    will-change: transform;
+    border: 0;
 }
 
 /* Chart touch visual states */
