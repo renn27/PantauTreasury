@@ -1,0 +1,3 @@
+#!/bin/sh
+node scripts/auto-bump-version.cjs
+git add index.html sw.js
