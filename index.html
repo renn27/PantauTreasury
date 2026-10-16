@@ -6,8 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Emas</title>
     <!-- Preconnect Domains for Speed -->
-    <link rel="preconnect" href="https://api.treasury.id">
-    <link rel="dns-prefetch" href="https://api.treasury.id">
+    <link rel="preconnect" href="https://webv2-api.treasury.id">
+    <link rel="dns-prefetch" href="https://webv2-api.treasury.id">
+    <link rel="preconnect" href="https://ws-ap1.pusher.com">
+    <link rel="dns-prefetch" href="https://ws-ap1.pusher.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://susdidr.vercel.app">
@@ -24,8 +26,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20261001142453">
-    <link rel="stylesheet" href="style.css?v=20261001142453">
+    <link rel="stylesheet" href="tailwind.css?v=20261016174706">
+    <link rel="stylesheet" href="style.css?v=20261016174706">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -95,18 +97,26 @@
                                                 <!-- Bagian Kiri: Update Terakhir & Waktu -->
                                                 <div class="flex-1 flex flex-col justify-between py-0.5">
                                                     <!-- Header -->
-                                                    <div class="update-info-heading">
-                                                        <span class="update-info-icon">
-                                                            <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none"
-                                                                stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    d="M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z">
-                                                                </path>
-                                                            </svg>
+                                                    <div class="update-info-heading flex items-center justify-between mr-1">
+                                                        <div class="flex items-center gap-1 min-w-0">
+                                                            <span class="update-info-icon">
+                                                                <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none"
+                                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                                        d="M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z">
+                                                                    </path>
+                                                                </svg>
+                                                            </span>
+                                                            <p class="update-info-label text-xs font-medium truncate">
+                                                                Update Terakhir
+                                                            </p>
+                                                        </div>
+                                                        <span id="treasuryWsBadge"
+                                                            class="treasury-ws-badge ws-live"
+                                                            title="Status: Pusher WebSocket Live (0-delay push)">
+                                                            <span id="treasuryWsBadgeDot" class="treasury-ws-dot"></span>
+                                                            <span id="treasuryWsBadgeText">Live WS</span>
                                                         </span>
-                                                        <p class="update-info-label text-xs font-medium">
-                                                            Update Terakhir
-                                                        </p>
                                                     </div>
 
                                                     <!-- Time -->
@@ -289,7 +299,7 @@
 
                     <!-- ROW 3: Ringkasan transaksi -->
                     <div class="stats-row min-h-0">
-                        <div class="stats-grid grid grid-cols-3 gap-2">
+                        <div class="stats-grid grid grid-cols-4 gap-2">
                             <!-- Gram Beli 60jt -->
                             <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
@@ -339,6 +349,21 @@
                                     </p>
                                 </div>
                                 <p id="cuan" class="text-sm font-bold text-ellipsis font-numeric">-</p>
+                            </div>
+
+                            <!-- USD/IDR Treasury (dari WebSocket) -->
+                            <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
+                                <div class="flex items-center mb-1.5">
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
+                                        USD/IDR Treasury
+                                    </p>
+                                </div>
+                                <p id="usdIdrTreasuryWs" class="text-sm font-bold text-blue-600 dark:text-blue-400 text-ellipsis font-numeric">-</p>
                             </div>
 
                         </div>
@@ -655,7 +680,7 @@
         <div class="status-footer">
             <div class="status-footer-brand">
                 <span class="status-footer-title">Pantau Treasury</span>
-                <span id="appVersionBadge" class="status-footer-version" title="Versi Frontend (GitHub Pages)">v26.10.01.5</span>
+                <span id="appVersionBadge" class="status-footer-version" title="Versi Frontend (GitHub Pages)">v26.10.16.1</span>
                 <span id="backendVersionBadge" class="status-footer-version" title="Versi Backend Vercel" style="display: none;">API: -</span>
             </div>
         </div>
@@ -731,8 +756,10 @@
     </div>
 
 
+    <!-- Pusher JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
     <!-- Script -->
-    <script src="script.js?v=20261001142453" defer></script>
+    <script src="script.js?v=20261016174706" defer></script>
 </body>
 
 </html>

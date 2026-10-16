@@ -1,12 +1,3 @@
-/* ================= REQUEST HEADERS (AMAN UNTUK BROWSER) ================= */
-const REQUEST_HEADERS = {
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-ID,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,id;q=0.6'
-};
-
-/* Pre-built Headers instance — tidak perlu dibuat ulang setiap fetch */
-const FETCH_HEADERS = new Headers(REQUEST_HEADERS);
-
 /* ================= NAMED CONSTANTS ================= */
 const FETCH_TIMEOUT_MS = 7000;
 const CACHE_LOCAL_TTL_MS = 30000;
@@ -17,10 +8,18 @@ const SIMULATION_SELL_BASE = 58006500;
 const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const PRICE_HISTORY_LIMIT = 30;
+const SIM_STATUS_COLOR_CLASSES = ['text-green-500', 'text-red-500', 'text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400'];
 const MY_USD_IDR_WS_URL = '';
 const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index';
 const USD_IDR_POLL_MS = 6 * 1000;
 const DEBUG = false;
+
+/* ================= TREASURY REALTIME CONFIG ================= */
+const TREASURY_PUSHER_KEY = '52e99bd2c3c42e577e13';
+const TREASURY_PUSHER_CLUSTER = 'ap1';
+const TREASURY_PUSHER_CHANNEL = 'gold-rate';
+const TREASURY_PUSHER_EVENT = 'gold-rate-event';
+const TREASURY_API_V2_PRICE_URL = 'https://webv2-api.treasury.id/api/v1/external/wp/gold/price';
 
 /* ================= INSTANT LOAD ================= */
 const priceCache = {
@@ -118,12 +117,58 @@ let state = {
     },
     previewTimeout: null,
     serverTimeOffset: savedServerOffset,
-    lastAutoFetchMinute: null
+    lastAutoFetchMinute: null,
+    treasuryPusher: null,
+    treasuryPusherChannel: null,
+    lastUsdIdrTreasury: null,
+    lastWsEventTime: null,
+    lastClockSyncTime: 0,
+    lastWatchdogFetchTime: 0
 };
 
 /* ================= SERVER TIME SYNCHRONIZATION ================= */
 function getServerNow() {
     return new Date(Date.now() + (state.serverTimeOffset || 0));
+}
+
+function applyServerHeaderDate(serverDateStr, roundtripMs = 0) {
+    if (!serverDateStr) return;
+    const parsedDate = new Date(serverDateStr);
+    if (Number.isNaN(parsedDate.getTime())) return;
+
+    const roundtrip = Math.max(0, roundtripMs || 0);
+    // Waktu Server Sebenarnya = parsedDate + estimasi 1/2 roundtrip latency
+    const actualServerMs = parsedDate.getTime() + Math.round(roundtrip / 2);
+    state.serverTimeOffset = actualServerMs - Date.now();
+    try {
+        localStorage.setItem('server_time_offset', String(state.serverTimeOffset));
+    } catch (e) { }
+    updateServerClock(getServerNow());
+}
+
+async function syncServerClock() {
+    const start = Date.now();
+    try {
+        // Request HEAD sangat ringan (0 byte payload) ke server Treasury untuk mendapatkan waktu server real-time asli (header Date)
+        const res = await fetch('https://webv2-api.treasury.id', {
+            method: 'HEAD',
+            cache: 'no-store'
+        });
+        const dateHeader = res.headers.get('Date');
+        if (dateHeader) {
+            applyServerHeaderDate(dateHeader, Date.now() - start);
+            debugLog('Jam server disinkronkan dari HTTP Date header Treasury:', dateHeader, 'offset:', state.serverTimeOffset);
+        }
+    } catch (err) {
+        // Fallback jika direct HEAD ke domain Treasury gagal
+        try {
+            const fallbackRes = await fetch('/api/market?limit=1', { method: 'HEAD', cache: 'no-store' });
+            const dateHeader = fallbackRes.headers.get('Date');
+            if (dateHeader) {
+                applyServerHeaderDate(dateHeader, Date.now() - start);
+            }
+        } catch (e) { }
+    }
 }
 
 /* ================= DOM CACHE ================= */
@@ -213,7 +258,8 @@ const ids = [
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
-    'backendStatusDot', 'backendVersionBadge'
+    'backendStatusDot', 'backendVersionBadge', 'usdIdrTreasuryWs',
+    'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
@@ -227,10 +273,19 @@ renderPriceHistoryDropdown('sell');
 attachPriceHistoryClickDelegation(dom.buyPriceHistoryList, 'buy');
 attachPriceHistoryClickDelegation(dom.sellPriceHistoryList, 'sell');
 renderCachedData();
+loadSimulationFromStorage();
 // Tampilkan jam server langsung di frame pertama
 updateServerClock(getServerNow());
-// startTimers() dan initial fetch diorkestrasi di DOMContentLoaded untuk mencegah race condition & double fetch
 renderCachedUsdIdr();
+connectUsdIdrFeed();
+
+// Render cached USD/IDR Treasury (WebSocket)
+try {
+    const savedUsdWs = localStorage.getItem('treasury_usdidr_ws');
+    if (savedUsdWs && dom.usdIdrTreasuryWs) {
+        dom.usdIdrTreasuryWs.textContent = formatRupiah(Number(savedUsdWs));
+    }
+} catch (e) { }
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
@@ -305,6 +360,7 @@ function getSimulationStorageKey() {
         sim.sellPrice || '',
         sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : '',
         sim.time || '',
+        sim.startTime || '',
         historyLen
     ].join('|');
 }
@@ -419,12 +475,14 @@ function dedupePriceHistory(history) {
 
         // Key keunikan berdasarkan menit timestamp (1 menit = 60.000 ms)
         const minuteKey = Math.floor(dateObj.getTime() / 60000);
-
-        seenMinutes.set(minuteKey, {
-            buy,
-            sell,
-            updated: dateObj.toISOString()
-        });
+        const existing = seenMinutes.get(minuteKey);
+        if (!existing || dateObj.getTime() >= parseTreasuryDate(existing.updated).getTime()) {
+            seenMinutes.set(minuteKey, {
+                buy,
+                sell,
+                updated: dateObj.toISOString()
+            });
+        }
     }
 
     const result = Array.from(seenMinutes.values());
@@ -478,7 +536,7 @@ function addPriceHistoryEntry(data) {
         return;
     }
 
-    state.priceHistory = newHistory;
+    state.priceHistory = newHistory.slice(-PRICE_HISTORY_LIMIT);
     savePriceHistory();
     renderPriceHistoryDropdown('buy');
     renderPriceHistoryDropdown('sell');
@@ -518,9 +576,10 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
         .slice()
         .reverse()
         .map((item, index, reversed) => {
-            const nextOlder = reversed[index + 1];
             const value = Number(item[valueKey]);
-            const change = nextOlder ? value - Number(nextOlder[valueKey]) : 0;
+            const nextOlder = reversed.slice(index + 1).find(older => Number(older[valueKey]) !== value);
+            const prevValue = nextOlder ? Number(nextOlder[valueKey]) : null;
+            const change = prevValue !== null ? value - prevValue : 0;
             const directionClass = change > 0
                 ? 'usd-idr-history-pill-up'
                 : change < 0
@@ -533,6 +592,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
                     : 'M6 12h12';
             const updated = parseTreasuryDate(item.updated);
             const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
+            const formattedDiff = change === 0 ? formatRupiah(0) : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
 
             return `
             <div class="price-history-item price-history-item--clickable" data-price="${value}" data-type="${type}" data-time="${item.updated}" role="button" tabindex="0" title="Klik untuk simulasi ${type === 'buy' ? 'beli' : 'jual'} Rp ${value.toLocaleString('id-ID')}">
@@ -542,7 +602,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
                     <svg class="usd-idr-history-pill-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
                     </svg>
-                    <span>${change === 0 ? formatRupiah(0) : formatRupiah(Math.abs(change))}</span>
+                    <span>${formattedDiff}</span>
                 </span>
             </div>
         `;
@@ -555,52 +615,33 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
 }
 
 /**
- * Trigger simulasi langsung dari klik row harga di dropdown dengan kalkulasi retroaktif.
- * @param {'buy'|'sell'} type
- * @param {number} price
- * @param {string} [updatedTime]
+ * Sinkronisasi total riwayat profit simulasi secara deterministik dari state.priceHistory.
+ * Memastikan setiap pergerakan harga di riwayat memiliki entri profit yang sinkron tanpa gap waktu.
  */
-function simulateFromHistory(type, price, updatedTime) {
-    if (!price || price <= 0) return;
+function syncSimulationProfitHistory() {
+    if (!state.simulation) return;
+    const mode = state.simulation.mode;
+    if (!mode) return;
 
-    toggleProfitHistoryDropdown('buy', false);
-    toggleProfitHistoryDropdown('sell', false);
+    const isBuy = mode === 'buy';
+    const price = isBuy ? Number(state.simulation.buyPrice) : Number(state.simulation.sellPrice);
+    if (!Number.isFinite(price) || price <= 0) return;
 
-    const isBuy = type === 'buy';
-    const mode = isBuy ? 'buy' : 'sell';
-
-    state.simulation.buyPrice = isBuy ? price : null;
-    state.simulation.sellPrice = !isBuy ? price : null;
-    state.simulation.mode = mode;
-    state.simulation.startTime = updatedTime || null;
-    state.simulation.time = updatedTime ? formatMinuteOnly(updatedTime) : formatMinuteOnly(getServerNow());
-
-    if (isBuy) {
-        state.simulation.gram = SIMULATION_BUY_BASE / price;
-        dom.markBuyBtn?.classList.add('simulation-active');
-        dom.markSellBtn?.classList.remove('simulation-active');
-    } else {
-        state.simulation.gram = SIMULATION_SELL_BASE / price;
-        dom.markSellBtn?.classList.add('simulation-active');
-        dom.markBuyBtn?.classList.remove('simulation-active');
-    }
-
-    // Hitung riwayat profit/loss ke belakang (backfill) dari titik waktu harga yang dipilih sampai terbaru
     const historyList = state.priceHistory || [];
     const profitHistoryEntries = [];
 
     let startIndex = -1;
-    if (updatedTime) {
-        startIndex = historyList.findIndex(item => item.updated === updatedTime);
+    const startTime = state.simulation.startTime;
+    if (startTime) {
+        startIndex = historyList.findIndex(item => item.updated === startTime);
         if (startIndex === -1) {
-            const targetMs = parseTreasuryDate(updatedTime).getTime();
+            const targetMs = parseTreasuryDate(startTime).getTime();
             if (!Number.isNaN(targetMs)) {
                 startIndex = historyList.findIndex(item => parseTreasuryDate(item.updated).getTime() >= targetMs);
             }
         }
     }
 
-    // Jika tidak ditemukan atau tidak ada updatedTime, cari index pertama dengan harga yang sama atau mulai dari 0
     if (startIndex === -1) {
         startIndex = historyList.findIndex(item => Number(item[mode]) === price);
     }
@@ -642,41 +683,73 @@ function simulateFromHistory(type, price, updatedTime) {
         });
     }
 
-    // Jika riwayat harga kosong sama sekali, buat entri awal dari harga live saat ini
-    if (profitHistoryEntries.length === 0) {
-        const liveBuy = Number(state.currentBuy);
-        const liveSell = Number(state.currentSell);
-        if (Number.isFinite(liveBuy) && Number.isFinite(liveSell) && liveBuy > 0 && liveSell > 0) {
-            let liveProfitLoss = 0;
-            let liveGramDiff = 0;
-            if (isBuy) {
-                const markedGram = floor4(SIMULATION_BUY_BASE / price);
-                const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
-                liveGramDiff = floor4(markedGram - currentGram);
-                const nilaiJual = markedGram * liveSell;
-                liveProfitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
-            } else {
-                const markedGram = floor4(SIMULATION_SELL_BASE / price);
-                const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
-                liveGramDiff = floor4(currentGram - markedGram);
-                liveProfitLoss = Math.round(liveGramDiff * liveSell);
-            }
-            profitHistoryEntries.push({
-                profitLoss: liveProfitLoss,
-                gramDiff: liveGramDiff,
-                time: formatMinuteOnly(new Date()),
-                timestamp: Date.now()
-            });
+    // Pastikan jika ada harga live sekarang yang belum masuk riwayat, kita sertakan
+    const liveBuy = Number(state.currentBuy);
+    const liveSell = Number(state.currentSell);
+    if (Number.isFinite(liveBuy) && Number.isFinite(liveSell) && liveBuy > 0 && liveSell > 0) {
+        let liveProfitLoss = 0;
+        let liveGramDiff = 0;
+        if (isBuy) {
+            const markedGram = floor4(SIMULATION_BUY_BASE / price);
+            const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
+            liveGramDiff = floor4(markedGram - currentGram);
+            const nilaiJual = markedGram * liveSell;
+            liveProfitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
+        } else {
+            const markedGram = floor4(SIMULATION_SELL_BASE / price);
+            const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
+            liveGramDiff = floor4(currentGram - markedGram);
+            liveProfitLoss = Math.round(liveGramDiff * liveSell);
         }
+
+        const serverNow = getServerNow();
+        profitHistoryEntries.push({
+            profitLoss: liveProfitLoss,
+            gramDiff: liveGramDiff,
+            time: formatMinuteOnly(serverNow),
+            timestamp: serverNow.getTime()
+        });
     }
 
     state.simulation.profitHistory = dedupeProfitHistory(profitHistoryEntries);
     saveSimulationToStorage();
+    renderProfitHistoryDropdown(mode);
+}
 
+/**
+ * Trigger simulasi langsung dari klik row harga di dropdown dengan kalkulasi retroaktif.
+ * @param {'buy'|'sell'} type
+ * @param {number} price
+ * @param {string} [updatedTime]
+ */
+function simulateFromHistory(type, price, updatedTime) {
+    if (!price || price <= 0) return;
+
+    toggleProfitHistoryDropdown('buy', false);
+    toggleProfitHistoryDropdown('sell', false);
+
+    const isBuy = type === 'buy';
+    const mode = isBuy ? 'buy' : 'sell';
+
+    state.simulation.buyPrice = isBuy ? price : null;
+    state.simulation.sellPrice = !isBuy ? price : null;
+    state.simulation.mode = mode;
+    state.simulation.startTime = updatedTime || null;
+    state.simulation.time = updatedTime ? formatMinuteOnly(updatedTime) : formatMinuteOnly(getServerNow());
+
+    if (isBuy) {
+        state.simulation.gram = SIMULATION_BUY_BASE / price;
+        dom.markBuyBtn?.classList.add('simulation-active');
+        dom.markSellBtn?.classList.remove('simulation-active');
+    } else {
+        state.simulation.gram = SIMULATION_SELL_BASE / price;
+        dom.markSellBtn?.classList.add('simulation-active');
+        dom.markBuyBtn?.classList.remove('simulation-active');
+    }
+
+    syncSimulationProfitHistory();
     updateSimulation(true);
-    // Tutup dropdown setelah memilih
     togglePriceHistoryDropdown(type, false);
-    // Scroll ke area simulasi
     dom.simulationResults?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1214,6 +1287,49 @@ function setupUsdIdrWsHandlers(ws) {
     };
 }
 
+/* ================= MERGE & BACKFILL GOLD HISTORY ================= */
+function mergeGoldHistory(incomingHistory) {
+    if (!Array.isArray(incomingHistory) || !incomingHistory.length) return;
+
+    const currentHistory = state.priceHistory || [];
+    const formattedIncoming = incomingHistory.map(item => {
+        let updated = item.updated_at || item.updated;
+        if (!updated && item.time) {
+            const timeStr = String(item.time).trim();
+            if (timeStr.includes(':')) {
+                const todayStr = new Date().toISOString().slice(0, 10);
+                updated = `${todayStr} ${timeStr}`;
+            } else {
+                updated = timeStr;
+            }
+        }
+        return {
+            buy: Number(item.buy),
+            sell: Number(item.sell),
+            updated: updated
+        };
+    }).filter(item => item.buy > 0 && item.sell > 0 && item.updated);
+
+    const merged = dedupePriceHistory([...currentHistory, ...formattedIncoming]);
+    const isDifferent = merged.length !== currentHistory.length ||
+        (merged.length > 0 && currentHistory.length > 0 && (
+            merged[merged.length - 1].updated !== currentHistory[currentHistory.length - 1].updated ||
+            merged[merged.length - 1].buy !== currentHistory[currentHistory.length - 1].buy
+        ));
+
+    if (isDifferent) {
+        state.priceHistory = merged.slice(-PRICE_HISTORY_LIMIT);
+        savePriceHistory();
+        renderPriceHistoryDropdown('buy');
+        renderPriceHistoryDropdown('sell');
+
+        // Jika ada simulasi aktif, sinkronkan ulang seluruh riwayat profit simulasi secara otomatis
+        if (state.simulation && state.simulation.mode) {
+            syncSimulationProfitHistory();
+        }
+    }
+}
+
 /* ================= KONEKSI KE FEED USD/IDR ================= */
 async function connectUsdIdrFeed() {
     if (!dom.usdIdrRate) return;
@@ -1240,7 +1356,7 @@ async function connectUsdIdrFeed() {
     // 2. Fallback / Mode Utama: Gunakan REST API
     try {
         debugLog('Mengambil data dari REST API...');
-        const res = await fetch(MY_USD_IDR_API_URL);
+        const res = await fetch(MY_USD_IDR_API_URL, { cache: 'no-store' });
         if (res.status === 304) {
             debugLog('USD/IDR data 304 Not Modified (cached via ETag)');
             setBackendConnectionStatus(true, 'Backend Vercel: Online');
@@ -1272,21 +1388,26 @@ async function connectUsdIdrFeed() {
             }
         }
 
-        // 2. Sinkronisasi Emas jika tersedia dalam respons terpadu
-        if (data.gold && data.gold.buy && data.gold.sell && !state.isFetching) {
+        // 2. Sinkronkan & Backfill Riwayat Harga Emas dari Backend Vercel
+        if (data.gold_history && Array.isArray(data.gold_history) && data.gold_history.length > 0) {
+            mergeGoldHistory(data.gold_history);
+        }
+
+        // 3. Update Harga Emas Live jika data dari Vercel lebih baru daripada cache lokal
+        if (data.gold && data.gold.buy && data.gold.sell) {
             const goldBuy = Number(data.gold.buy);
             const goldSell = Number(data.gold.sell);
-            const currentCached = priceCache.get();
-            const isPriceChanged = goldBuy !== state.currentBuy || goldSell !== state.currentSell;
-            const isTimeChanged = data.gold.updated_at && currentCached && data.gold.updated_at !== currentCached.updated;
-            if (isPriceChanged || isTimeChanged) {
+            const goldUpdated = data.gold.updated_at || data.server_time || data.timestamp;
+            if (goldBuy > 0 && goldSell > 0 && goldUpdated) {
                 const goldResult = {
                     buy: goldBuy,
                     sell: goldSell,
-                    updated: data.gold.updated_at
+                    updated: goldUpdated
                 };
-                updateUI(goldResult);
-                priceCache.set(goldResult);
+                const didUpdate = updateUI(goldResult);
+                if (didUpdate) {
+                    priceCache.set(goldResult);
+                }
             }
         }
 
@@ -1297,6 +1418,139 @@ async function connectUsdIdrFeed() {
         setBackendConnectionStatus(false, 'Backend Vercel: Gangguan / Offline');
         setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
         state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, USD_IDR_POLL_MS);
+    }
+}
+
+/* ================= TREASURY PUSHER WEBSOCKET (REALTIME LIVE ENGINE) ================= */
+function renderUsdIdrTreasuryWs(rate) {
+    if (!dom.usdIdrTreasuryWs) return;
+    const num = Number(rate);
+    if (!Number.isFinite(num) || num <= 0) return;
+
+    const prev = state.lastUsdIdrTreasury;
+    state.lastUsdIdrTreasury = num;
+    dom.usdIdrTreasuryWs.textContent = formatRupiah(num);
+
+    if (prev && prev !== num) {
+        dom.usdIdrTreasuryWs.classList.remove('price-flash-green', 'price-flash-red');
+        void dom.usdIdrTreasuryWs.offsetWidth;
+        dom.usdIdrTreasuryWs.classList.add(num > prev ? 'price-flash-green' : 'price-flash-red');
+    }
+
+    try {
+        localStorage.setItem('treasury_usdidr_ws', String(num));
+    } catch (e) { }
+}
+
+function updateTreasuryWsStatus(status) {
+    if (!dom.treasuryWsBadge || !dom.treasuryWsBadgeText) return;
+
+    dom.treasuryWsBadge.classList.remove('ws-live', 'ws-connecting', 'ws-fallback');
+
+    if (status === 'connected') {
+        dom.treasuryWsBadge.classList.add('ws-live');
+        dom.treasuryWsBadgeText.textContent = 'Live WS';
+        dom.treasuryWsBadge.title = 'Koneksi Pusher WebSocket Real-Time Terhubung (0-delay push)';
+    } else if (status === 'connecting') {
+        dom.treasuryWsBadge.classList.add('ws-connecting');
+        dom.treasuryWsBadgeText.textContent = 'Menghubungkan...';
+        dom.treasuryWsBadge.title = 'Sedang menyambungkan ke Pusher WebSocket Treasury...';
+    } else {
+        dom.treasuryWsBadge.classList.add('ws-fallback');
+        dom.treasuryWsBadgeText.textContent = 'Fallback REST';
+        dom.treasuryWsBadge.title = 'WebSocket tidak aktif — Watchdog polling REST aktif';
+    }
+}
+
+function initTreasuryPusher() {
+    if (typeof Pusher === 'undefined') {
+        debugLog('Pusher library belum siap di window, mencoba muat dinamis...');
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js';
+        s.onload = () => initTreasuryPusher();
+        document.head.appendChild(s);
+        return;
+    }
+
+    if (state.treasuryPusher) {
+        if (state.treasuryPusher.connection && state.treasuryPusher.connection.state !== 'connected') {
+            state.treasuryPusher.connect();
+        }
+        return;
+    }
+
+    try {
+        debugLog('Menghubungkan ke Pusher WebSocket Treasury...');
+        const pusher = new Pusher(TREASURY_PUSHER_KEY, {
+            cluster: TREASURY_PUSHER_CLUSTER,
+            forceTLS: true
+        });
+
+        const channel = pusher.subscribe(TREASURY_PUSHER_CHANNEL);
+
+        channel.bind(TREASURY_PUSHER_EVENT, function (data) {
+            debugLog('Pusher Treasury live update diterima:', data);
+            handleTreasuryPusherEvent(data);
+        });
+
+        pusher.connection.bind('state_change', function (states) {
+            debugLog('Status koneksi Pusher Treasury:', states.current);
+            updateTreasuryWsStatus(states.current);
+        });
+
+        state.treasuryPusher = pusher;
+        state.treasuryPusherChannel = channel;
+        updateTreasuryWsStatus(pusher.connection.state);
+    } catch (err) {
+        debugLog('Gagal inisialisasi Pusher Treasury:', err);
+        updateTreasuryWsStatus('failed');
+    }
+}
+
+function handleTreasuryPusherEvent(raw) {
+    try {
+        const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!payload || !payload.buying_rate || !payload.selling_rate) return;
+
+        const buy = Number(String(payload.buying_rate).replace(/\./g, ''));
+        const sell = Number(String(payload.selling_rate).replace(/\./g, ''));
+        if (!Number.isFinite(buy) || !Number.isFinite(sell) || buy <= 0 || sell <= 0) return;
+
+        const updated = payload.created_at || new Date().toISOString();
+        const result = {
+            buy,
+            sell,
+            updated
+        };
+
+        // Catatan: created_at adalah timestamp snapshot data harga (Update Terakhir),
+        // BUKAN jam fisik server real-time (agar jam tidak membeku jika harga tidak berubah).
+        // Jam fisik server disinkronkan via HTTP Date header secara terpisah.
+
+        // 1. Update UI dan Cache seketika tanpa jeda
+        updateUI(result);
+        priceCache.set(result);
+        state.lastWsEventTime = Date.now();
+        state.lastAutoFetchMinute = Math.floor(getServerNow().getTime() / 60000);
+
+        // 3. Render Card Baru USD/IDR Treasury (dari WebSocket)
+        if (payload.usdidr) {
+            renderUsdIdrTreasuryWs(payload.usdidr);
+        }
+
+        // 4. Pastikan ikon refresh berhenti berputar seketika
+        if (dom.bigRefreshIcon) {
+            dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
+        }
+
+        state.isFetching = false;
+        state.isAutoFetching = false;
+        state.isRetrying = false;
+        state.retryCount = 0;
+        state.targetMinute = null;
+        clearRetryTimeout();
+    } catch (err) {
+        debugLog('Error parsing payload Pusher Treasury:', err);
     }
 }
 
@@ -1335,6 +1589,28 @@ function triggerManualRefresh() {
     state.retryCount = 0;
     state.targetMinute = null;
     clearRetryTimeout();
+
+    // 1. Selalu sinkronkan jam server resmi dan kurs USD/IDR
+    syncServerClock();
+    connectUsdIdrFeed();
+
+    // 2. Cek koneksi Pusher WebSocket (Realtime Live Engine)
+    const pusherState = state.treasuryPusher?.connection?.state;
+    if (pusherState === 'connected') {
+        debugLog('Manual Refresh: WebSocket sudah Live WS aktif, tidak perlu menembak REST API WordPress.');
+        setTimeout(() => {
+            if (dom.bigRefreshIcon) {
+                dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
+            }
+            state.isManualRefresh = false;
+        }, 500);
+        return;
+    }
+
+    // 3. Jika Pusher belum connected / terputus, coba sambungkan ulang & fetch fallback
+    if (state.treasuryPusher && pusherState !== 'connected') {
+        state.treasuryPusher.connect();
+    }
 
     if (state.fetchController) state.fetchController.abort();
     fetchHarga(true);
@@ -1401,57 +1677,33 @@ function showButtonFeedback(btn, type, duration) {
 
 /* ================= SHARED: Schedule Retry ================= */
 function scheduleRetry(reason) {
-    if (!state.isAutoFetching) return;
-
-    // Tentukan batas maksimal retry berdasarkan alasan
-    const maxRetry = reason === 'stale-data' ? 18 : state.MAX_RETRY;
-    state.activeMaxRetry = maxRetry;
-
-    if (state.retryCount >= maxRetry) {
-        debugLog(`Max retry reached (${reason}), stopping`);
-        state.isAutoFetching = false;
-        state.isRetrying = false;
-        state.retryCount = 0;
-        state.targetMinute = null;
-        clearRetryTimeout();
-        return;
-    }
-
-    state.retryCount++;
-
-    // Tentukan jeda retry berdasarkan alasan
-    let delay;
-    if (reason === 'stale-data') {
-        // Percobaan 1 & 2 ultra-cepat (500ms), 3 & 4 (800ms), 5-10 (1500ms), 11-18 (2000ms)
-        // Memastikan cakupan penuh hingga detik ke-28 jika server Treasury mengalami delay rilis
-        if (state.retryCount <= 2) {
-            delay = 500;
-        } else if (state.retryCount <= 4) {
-            delay = 800;
-        } else if (state.retryCount <= 10) {
-            delay = 1500;
-        } else {
-            delay = 2000;
-        }
-    } else {
-        // Untuk timeout/error, gunakan exponential backoff cepat
-        delay = Math.min(2000, 500 + (state.retryCount * 300));
-    }
-
-    debugLog(`Retry ${reason} ${state.retryCount}/${maxRetry} in ${delay}ms`);
-
+    // Retry loop dinonaktifkan karena Pusher WebSocket menangani update live secara otomatis
     clearRetryTimeout();
-    state.retryTimeoutId = setTimeout(() => {
-        state.retryTimeoutId = null;
-        if (state.isAutoFetching && state.isRetrying) {
-            fetchHarga();
-        }
-    }, delay);
+    state.isAutoFetching = false;
+    state.isRetrying = false;
+    state.retryCount = 0;
+    state.targetMinute = null;
 }
 
 /* ================= RENDER CACHED DATA INSTANTLY ================= */
 function renderCachedData() {
-    const cached = priceCache.data || priceCache.get();
+    let cached = priceCache.data || priceCache.get();
+
+    // Pastikan card menggunakan data teraktual: jika priceHistory memiliki data lebih baru dari gold_cache, prioritaskan priceHistory
+    if (state.priceHistory && state.priceHistory.length > 0) {
+        const latestHistory = state.priceHistory[state.priceHistory.length - 1];
+        const historyTime = parseTreasuryDate(latestHistory.updated).getTime();
+        const cachedTime = cached ? parseTreasuryDate(cached.updated).getTime() : 0;
+        if (!cached || (!Number.isNaN(historyTime) && historyTime >= cachedTime)) {
+            cached = {
+                buy: latestHistory.buy,
+                sell: latestHistory.sell,
+                updated: latestHistory.updated
+            };
+            priceCache.data = cached;
+        }
+    }
+
     if (!cached || !dom.hargaBeli) return false;
 
     debugLog('Rendering cached data');
@@ -1717,6 +1969,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.sellPrice = null;
                 state.simulation.mode = 'buy';
                 state.simulation.time = timeStr;
+                state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
                 state.simulation.gram = SIMULATION_BUY_BASE / price;
 
                 dom.markBuyBtn.classList.add('simulation-active');
@@ -1742,6 +1995,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.buyPrice = null;
                 state.simulation.mode = 'sell';
                 state.simulation.time = timeStr;
+                state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
                 state.simulation.gram = SIMULATION_SELL_BASE / price;
 
                 dom.markSellBtn.classList.add('simulation-active');
@@ -1952,6 +2206,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start timers
     startTimers();
 
+    // Segera sinkronisasikan jam server dari HTTP Date header
+    syncServerClock();
+
+    // Start Pusher WebSocket for instant Treasury Gold push
+    initTreasuryPusher();
+
+    // Start USD/IDR Feed (Google Finance via Vercel backend)
+    connectUsdIdrFeed();
+
     // Pause/resume timer dan TradingView suspend saat tab hidden/visible
     let tvSuspendTimeoutId = null;
     let savedTvSrc = null;
@@ -1990,11 +2253,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!state.timerTicker) {
                 startTimers();
             }
+            syncServerClock();
+            if (state.treasuryPusher && state.treasuryPusher.connection && state.treasuryPusher.connection.state !== 'connected') {
+                state.treasuryPusher.connect();
+            } else {
+                initTreasuryPusher();
+            }
             connectUsdIdrFeed();
 
-            // Refresh harga emas segera jika tab dibuka kembali setelah idle > 30 detik
-            if (!state.lastFetchTime || (Date.now() - state.lastFetchTime > 30000)) {
-                debugLog('Tab kembali aktif setelah idle, menyegarkan data harga...');
+            // Refresh harga emas jika tab dibuka kembali DAN WebSocket sedang tidak terhubung
+            const isWsActive = state.treasuryPusher?.connection?.state === 'connected';
+            if (!isWsActive && (!state.lastFetchTime || (Date.now() - state.lastFetchTime > 30000))) {
+                debugLog('Tab kembali aktif & WS belum live, menyegarkan data harga via REST...');
                 fetchHarga();
             }
         }
@@ -2007,15 +2277,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('online', () => {
         state.usdIdrReconnectAttempt = 0;
+        syncServerClock();
+        if (state.treasuryPusher && state.treasuryPusher.connection && state.treasuryPusher.connection.state !== 'connected') {
+            state.treasuryPusher.connect();
+        } else {
+            initTreasuryPusher();
+        }
         connectUsdIdrFeed();
 
-        // Segera ambil harga emas baru saat koneksi internet pulih kembali
-        state.isAutoFetching = true;
-        state.isRetrying = false;
-        state.retryCount = 0;
-        state.targetMinute = null;
-        clearRetryTimeout();
-        fetchHarga();
+        // Hanya fetch REST jika Pusher belum terhubung setelah 1.5 detik
+        setTimeout(() => {
+            if (state.treasuryPusher?.connection?.state !== 'connected') {
+                state.isAutoFetching = true;
+                clearRetryTimeout();
+                fetchHarga();
+            }
+        }, 1500);
     });
 
 
@@ -2055,9 +2332,9 @@ function applyChartWidth(width) {
     }
 }
 
-/* ================= HYPER-FAST FETCH (UNIFIED BACKEND & FAIL-SAFE) ================= */
+/* ================= HYPER-FAST FETCH (TREASURY WEBV2 API & FALLBACK) ================= */
 async function fetchHarga(force = false) {
-    debugLog('Fetching data...');
+    debugLog('Fetching data harga emas terbaru...');
 
     const fetchSeq = ++state.fetchSeq;
     state.isFetching = true;
@@ -2074,229 +2351,117 @@ async function fetchHarga(force = false) {
 
     const controller = new AbortController();
     state.fetchController = controller;
-    let isTimedOut = false;
 
-    // Timeout
     const timeoutId = setTimeout(() => {
-        isTimedOut = true;
         controller.abort();
     }, FETCH_TIMEOUT_MS);
 
-    const isForce = force || state.isManualRefresh;
-    let result = null;
-    let referenceTime = new Date();
-    let isCurrentMinute = false;
-
     try {
         const start = Date.now();
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-        // 1. JALUR UTAMA: Ambil data terpadu dari Backend Vercel (Emas + USD/IDR Sekaligus)
-        try {
-            const isTransition = state.isAutoFetching || state.isRetrying || isForce;
-            const targetUrl = isTransition ? `${MY_USD_IDR_API_URL}?force=true&_t=${Date.now()}` : MY_USD_IDR_API_URL;
-            const res = await fetch(targetUrl, {
-                signal: controller.signal,
-                headers: isTransition ? { 'Cache-Control': 'no-cache, no-store' } : undefined
-            });
+        // Mengambil data harga emas langsung dari API Resmi WebV2 Treasury
+        const res = await fetch(TREASURY_API_V2_PRICE_URL, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, text/plain, */*'
+            },
+            body: JSON.stringify({
+                start_date: fmt(yesterday),
+                end_date: fmt(now),
+                type: 'daily',
+                region: 'id',
+                assetType: 'gold'
+            }),
+            cache: 'no-store'
+        });
 
-            if (res.status === 304) {
-                const cached = priceCache.data || priceCache.get();
-                if (cached) {
-                    result = cached;
-                    priceCache.timestamp = Date.now();
-                    const serverDateHeader = res.headers.get('Date');
-                    if (serverDateHeader) {
-                        const parsedHeaderDate = new Date(serverDateHeader);
-                        if (!Number.isNaN(parsedHeaderDate.getTime())) {
-                            referenceTime = parsedHeaderDate;
-                            const roundtrip = Math.max(0, Date.now() - start);
-                            state.serverTimeOffset = (parsedHeaderDate.getTime() + Math.round(roundtrip / 2)) - Date.now();
-                            try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
-                            updateServerClock(getServerNow());
-                        }
-                    } else {
-                        referenceTime = getServerNow();
-                    }
-                    setBackendConnectionStatus(true, 'Backend Vercel: Online');
-                    scheduleUsdIdrPoll();
-                }
-            } else if (res.ok) {
-                const json = await res.json();
-                if (json && json.version) {
-                    updateBackendVersionDisplay(json.version, json.commit_sha);
-                }
-                if (json && json.gold && json.gold.buy && json.gold.sell) {
-                    result = {
-                        buy: Number(json.gold.buy),
-                        sell: Number(json.gold.sell),
-                        updated: json.gold.updated_at
-                    };
-
-                    // Sinkronisasi waktu server dari payload
-                    if (json.timestamp) {
-                        const parsedTime = new Date(json.timestamp);
-                        if (!Number.isNaN(parsedTime.getTime())) {
-                            referenceTime = parsedTime;
-                            const roundtrip = Math.max(0, Date.now() - start);
-                            state.serverTimeOffset = (parsedTime.getTime() + Math.round(roundtrip / 2)) - Date.now();
-                            try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
-                            updateServerClock(getServerNow());
-                        }
-                    }
-
-                    // Sinkronisasi data USD/IDR sekaligus
-                    const hasUsdHistory = (json.usd_idr_history && Array.isArray(json.usd_idr_history) && json.usd_idr_history.length)
-                        || (json.history && Array.isArray(json.history) && json.history.length);
-
-                    if (json.usd_idr_history && Array.isArray(json.usd_idr_history)) {
-                        renderUsdIdrHistory(json.usd_idr_history);
-                    } else if (json.history && Array.isArray(json.history)) {
-                        renderUsdIdrHistory(json.history);
-                    }
-
-                    // Hanya panggil renderUsdIdrRate langsung jika belum dirender via renderUsdIdrHistory (hindari double call reset warna)
-                    if (!hasUsdHistory) {
-                        if (json.usd_idr && json.usd_idr.price) {
-                            renderUsdIdrRate(json.usd_idr.price, json.usd_idr.time, undefined, json.usd_idr.timestamp || json.usd_idr.updated_at);
-                        } else if (json.price) {
-                            renderUsdIdrRate(json.price, json.time, undefined, json.timestamp || json.updated_at);
-                        }
-                    }
-
-                    setBackendConnectionStatus(true, 'Backend Vercel: Online');
-                    scheduleUsdIdrPoll();
-                }
-            }
-        } catch (backendErr) {
-            if (backendErr.name === 'AbortError') throw backendErr;
-            setBackendConnectionStatus(false, 'Backend Vercel: Offline (Fallback Direct Treasury)');
-            debugLog('Backend Vercel offline/error, mengaktifkan fail-safe direct fetch:', backendErr);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
         }
 
-        // 2. JALUR CADANGAN (Fail-Safe Fallback): Direct fetch ke api.treasury.id jika backend Vercel gagal
-        if (!result) {
-            debugLog('Menjalankan Fail-Safe direct fetch ke api.treasury.id...');
-            const directRes = await fetch('https://api.treasury.id/api/v1/antigrvty/gold/rate', {
-                method: 'POST',
-                signal: controller.signal,
-                headers: FETCH_HEADERS,
-                mode: 'cors',
-                credentials: 'omit',
-                cache: 'no-store',
-                redirect: 'follow',
-                referrerPolicy: 'no-referrer',
-                priority: 'high'
-            });
-
-            if (!directRes.ok) {
-                throw new Error(`HTTP ${directRes.status}`);
-            }
-
-            const directJson = await directRes.json();
-            const directData = directJson.data;
-            if (!directData) {
-                throw new Error('Invalid Treasury API response');
-            }
-
-            result = {
-                buy: Number(directData.buying_rate),
-                sell: Number(directData.selling_rate),
-                updated: directData.updated_at
-            };
-
-            const serverDateHeader = directRes.headers.get('Date');
-            if (serverDateHeader) {
-                const parsedHeaderDate = new Date(serverDateHeader);
-                if (!Number.isNaN(parsedHeaderDate.getTime())) {
-                    referenceTime = parsedHeaderDate;
-                    const roundtrip = Math.max(0, Date.now() - start);
-                    state.serverTimeOffset = (parsedHeaderDate.getTime() + Math.round(roundtrip / 2)) - Date.now();
-                    try { localStorage.setItem('server_time_offset', String(state.serverTimeOffset)); } catch (e) { }
-                    updateServerClock(getServerNow());
-                }
-            }
+        const json = await res.json();
+        const prices = json?.data?.attributes?.prices;
+        if (!prices || !prices.length) {
+            throw new Error('Invalid Treasury API response');
         }
 
-        const fetchTime = Date.now() - start;
-        debugLog(`Fetch: ${fetchTime}ms`);
-
-        // Periksa apakah data sudah sesuai dengan menit saat ini berdasarkan referensi waktu server
-        const updated = parseTreasuryDate(result.updated);
-        isCurrentMinute = isSameMinuteBucket(updated, referenceTime);
-
-        debugLog(`Data updated at: ${formatTimeId(updated)}`);
-        debugLog(`Reference time: ${formatTimeId(referenceTime)}`);
-        debugLog(`Is current minute: ${isCurrentMinute}`);
-
-        // Jika ini adalah fetch pertama di detik 1
-        if (state.isAutoFetching && !state.targetMinute) {
-            state.targetMinute = referenceTime.getMinutes();
-            debugLog(`Setting target minute: ${state.targetMinute}`);
+        const latestPrice = prices[prices.length - 1];
+        let updatedStr = '';
+        if (latestPrice.datetime && latestPrice.datetime.includes(' - ')) {
+            const parts = latestPrice.datetime.split(' - ');
+            const dateParts = parts[0].split('/');
+            const fullYear = dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2];
+            updatedStr = `${fullYear}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')} ${parts[1].trim()}:00`;
+        } else {
+            updatedStr = fmt(now);
         }
 
-        // Update UI dan cache
-        updateUI(result);
-        priceCache.set(result);
+        const result = {
+            buy: Number(latestPrice.buy_price),
+            sell: Number(latestPrice.sell_price),
+            updated: updatedStr
+        };
 
-        // Reset manual refresh flag jika berhasil
-        state.isManualRefresh = false;
-
-        // Jika data sudah sesuai dengan menit saat ini, berhenti retry dan reset flag auto-fetch
-        if (state.isRetrying && isCurrentMinute) {
-            debugLog('Data sudah sesuai dengan menit saat ini, berhenti retry');
-            state.isAutoFetching = false;
-            state.isRetrying = false;
-            state.retryCount = 0;
-            state.targetMinute = null;
-            clearRetryTimeout();
+        // 1. Sinkronisasi Waktu Server dari header Date response
+        const serverDateHeader = res.headers.get('Date');
+        if (serverDateHeader) {
+            applyServerHeaderDate(serverDateHeader, Date.now() - start);
         }
 
-        // Jika dalam mode auto-fetch dan data belum sesuai
-        if (state.isAutoFetching && !isCurrentMinute) {
-            if (!state.targetMinute) {
-                state.targetMinute = referenceTime.getMinutes();
-            }
-            state.isRetrying = true;
-            scheduleRetry('stale-data');
-        }
-
-    } catch (err) {
-
-        if (err.name === 'AbortError') {
-            if (!isTimedOut) {
-                debugLog('Fetch dibatalkan oleh request baru');
+        // 2. Update UI dan simpan ke cache HANYA jika data tidak usang dibanding riwayat live saat ini
+        if (state.priceHistory && state.priceHistory.length > 0) {
+            const incomingTime = parseTreasuryDate(result.updated).getTime();
+            const latestHistoryTime = parseTreasuryDate(state.priceHistory[state.priceHistory.length - 1].updated).getTime();
+            if (!Number.isNaN(incomingTime) && incomingTime < latestHistoryTime) {
+                debugLog('fetchHarga: Data dari REST API lebih usang dari riwayat live, mengabaikan.');
+                state.lastFetchTime = Date.now();
                 return;
             }
-
-            if (dom.lastUpdate) {
-                dom.lastUpdate.textContent = `Timeout (${FETCH_TIMEOUT_MS / 1000}s)`;
-            }
-            debugLog('Fetch timeout');
-
-            if (!state.isManualRefresh) {
-                scheduleRetry('timeout');
-            } else {
-                setTimeout(() => {
-                    const cached = priceCache.get();
-                    if (cached && dom.lastUpdate) {
-                        dom.lastUpdate.textContent = formatTimeIdHms(parseTreasuryDate(cached.updated));
-                    }
-                    state.isManualRefresh = false;
-                }, 2000);
-            }
-            return;
         }
 
-        console.error('Fetch error:', err);
-
-        if (dom.lastUpdate && (!state.isRetrying || state.retryCount >= (state.activeMaxRetry || state.MAX_RETRY))) {
-            dom.lastUpdate.textContent = 'Fetch error';
+        const didUpdate = updateUI(result);
+        if (didUpdate) {
+            priceCache.set(result);
         }
+        state.lastFetchTime = Date.now();
 
-        if (!state.isManualRefresh) {
-            scheduleRetry('error');
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            debugLog('Fetch harga dibatalkan / timeout');
         } else {
-            state.isManualRefresh = false;
+            console.error('Fetch harga error, mencoba fallback Tier 2 ke proxy Vercel:', err);
+        }
+
+        // Automatic Multi-Tier Fallback: Ambil data emas dari backend proxy Vercel susdidr.vercel.app/api/index
+        try {
+            const fallbackRes = await fetch(MY_USD_IDR_API_URL, {
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (fallbackRes.ok) {
+                const fbJson = await fallbackRes.json();
+                if (fbJson.treasury_gold && fbJson.treasury_gold.buy && fbJson.treasury_gold.sell) {
+                    const fallbackResult = {
+                        buy: Number(fbJson.treasury_gold.buy),
+                        sell: Number(fbJson.treasury_gold.sell),
+                        updated: fbJson.treasury_gold.updated_at || fbJson.time || new Date().toISOString()
+                    };
+                    const didUpdateFb = updateUI(fallbackResult);
+                    if (didUpdateFb) {
+                        priceCache.set(fallbackResult);
+                    }
+                    state.lastFetchTime = Date.now();
+                    debugLog('Data harga emas sukses dipulihkan via Tier 2 Vercel proxy fallback!');
+                }
+            }
+        } catch (fbErr) {
+            debugLog('Tier 2 fallback proxy juga gagal:', fbErr);
         }
     } finally {
         clearTimeout(timeoutId);
@@ -2306,19 +2471,36 @@ async function fetchHarga(force = false) {
         if (state.fetchSeq === fetchSeq) {
             state.isFetching = false;
         }
+        state.isManualRefresh = false;
+        state.isAutoFetching = false;
+        state.isRetrying = false;
+        clearRetryTimeout();
+
+        // Pastikan animasi tombol berputar dihentikan seketika setelah fetch selesai
         if (dom.bigRefreshIcon) {
-            dom.bigRefreshIcon.classList.remove('refresh-spin');
+            dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
         }
     }
 }
 
 /* ================= UPDATE UI ================= */
 function updateUI(data) {
-    if (!dom.hargaBeli) return;
+    if (!dom.hargaBeli) return false;
 
     const buy = Number(data.buy);
     const sell = Number(data.sell);
-    if (!Number.isFinite(buy) || !Number.isFinite(sell) || buy <= 0 || sell <= 0) return;
+    if (!Number.isFinite(buy) || !Number.isFinite(sell) || buy <= 0 || sell <= 0) return false;
+
+    // MONOTONIC TIMESTAMP GUARD: Jangan biarkan data usang me-rollback state atau merusak sinkronisasi pill!
+    if (data.updated && state.priceHistory && state.priceHistory.length > 0) {
+        const incomingTime = parseTreasuryDate(data.updated).getTime();
+        const latestHistoryTime = parseTreasuryDate(state.priceHistory[state.priceHistory.length - 1].updated).getTime();
+        if (!Number.isNaN(incomingTime) && !Number.isNaN(latestHistoryTime) && incomingTime < latestHistoryTime) {
+            debugLog('updateUI: Mengabaikan data usang', data.updated, 'karena ada riwayat lebih baru:', state.priceHistory[state.priceHistory.length - 1].updated);
+            return false;
+        }
+    }
+
     const previousBuy = state.lastRenderedBuy;
     const previousSell = state.lastRenderedSell;
     state.currentBuy = buy;
@@ -2355,6 +2537,8 @@ function updateUI(data) {
     if (state.simulation.mode) {
         updateSimulation();
     }
+
+    return true;
 }
 
 /* ================= SIMULATION ================= */
@@ -2564,6 +2748,7 @@ function applyManualGramSimulation(mode) {
         state.simulation.sellPrice = null;
         state.simulation.mode = 'buy';
         state.simulation.time = timeStr;
+        state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
         dom.markBuyBtn?.classList.add('simulation-active');
         dom.markSellBtn?.classList.remove('simulation-active');
     } else {
@@ -2571,6 +2756,7 @@ function applyManualGramSimulation(mode) {
         state.simulation.buyPrice = null;
         state.simulation.mode = 'sell';
         state.simulation.time = timeStr;
+        state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
         dom.markSellBtn?.classList.add('simulation-active');
         dom.markBuyBtn?.classList.remove('simulation-active');
     }
@@ -2639,8 +2825,9 @@ function addSimulationProfitHistoryEntry(mode, profitLoss, gramDiff) {
     }
 
     const history = state.simulation.profitHistory;
-    const now = Date.now();
-    const timeStr = formatMinuteOnly(new Date(now));
+    const serverNow = getServerNow();
+    const now = serverNow.getTime();
+    const timeStr = formatMinuteOnly(serverNow);
 
     const newHistory = dedupeProfitHistory([...history, {
         profitLoss: Math.round(profitLoss),
@@ -2821,7 +3008,7 @@ function updateSimulation(skipAddHistory = false) {
         const node = ensureSimulationNode('buy');
         updateSimulationCardValues('buy', node, markedGram, currentGram, gramDiff, profitLoss);
         if (!skipAddHistory) {
-            addSimulationProfitHistoryEntry('buy', profitLoss, gramDiff);
+            syncSimulationProfitHistory();
         } else {
             renderProfitHistoryDropdown('buy');
         }
@@ -2841,7 +3028,7 @@ function updateSimulation(skipAddHistory = false) {
         const node = ensureSimulationNode('sell');
         updateSimulationCardValues('sell', node, markedGram, currentGram, gramDiff, profitLoss);
         if (!skipAddHistory) {
-            addSimulationProfitHistoryEntry('sell', profitLoss, gramDiff);
+            syncSimulationProfitHistory();
         } else {
             renderProfitHistoryDropdown('sell');
         }
@@ -2909,13 +3096,13 @@ function loadSimulationFromStorage() {
                     dom.markBuyBtn?.classList.remove('simulation-active');
                 }
 
-                setTimeout(() => {
-                    const buy = Number(state.currentBuy);
-                    const sell = Number(state.currentSell);
-                    if (buy > 0 && sell > 0) {
-                        updateSimulation(true);
-                    }
-                }, 500);
+                // Segera update kartu simulasi dan sinkronkan riwayat profit ke riwayat harga
+                const buy = Number(state.currentBuy);
+                const sell = Number(state.currentSell);
+                if (buy > 0 && sell > 0) {
+                    updateSimulation(true);
+                }
+                syncSimulationProfitHistory();
 
                 return true;
             }
@@ -2934,6 +3121,7 @@ function clearSimulation() {
         mode: null,
         gram: null,
         time: null,
+        startTime: null,
         profitHistory: []
     };
     state.lastSimulationStorageKey = null;
@@ -2979,8 +3167,6 @@ function clearSimulation() {
 }
 
 /* ================= FUNGSI BARU: UPDATE STATUS SIMULASI ================= */
-const SIM_STATUS_COLOR_CLASSES = ['text-green-500', 'text-red-500', 'text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400'];
-
 function ensureSimStatusTemplate() {
     if (simStatusSlots && simStatusSlots.root && simStatusSlots.root.isConnected) {
         return simStatusSlots;
@@ -3084,30 +3270,30 @@ function startTimers() {
 
 function tickTimers() {
     const serverNow = getServerNow();
-    const serverSeconds = serverNow.getSeconds();
-    const serverMs = serverNow.getMilliseconds();
-    const currentMinuteBucket = Math.floor(serverNow.getTime() / 60000);
 
     // Update tampilan jam digital native server Treasury
     updateServerClock(serverNow);
 
-    // Pre-fire auto-fetch pada detik 00.75s - 00.8s di menit baru
-    // Menembak sedikit lebih awal agar paket request tiba di server Treasury tepat di detik 01.0s saat database mereka rilis
-    // Toleransi hingga detik 30 agar tidak pernah terlewat jika terjadi background throttling
+    // Sync ulang jam server setiap 15 menit agar tetap presisi terhadap clock drift perangkat
+    if (!state.lastClockSyncTime || (Date.now() - state.lastClockSyncTime > 15 * 60 * 1000)) {
+        state.lastClockSyncTime = Date.now();
+        syncServerClock();
+    }
+
+    // Watchdog cadangan adaptif: Hanya fetch jika Pusher WebSocket hening saat pergantian menit
+    const currentMinuteBucket = Math.floor(serverNow.getTime() / 60000);
     const isNewMinute = state.lastAutoFetchMinute !== currentMinuteBucket;
-    const isPreFireWindow = (serverSeconds === 0 && serverMs >= 750) || (serverSeconds >= 1 && serverSeconds <= 30);
-    const isInitialTick = state.lastAutoFetchMinute === null;
+    const silentMs = state.lastWsEventTime ? (Date.now() - state.lastWsEventTime) : 120000;
+    const isPusherSilent = silentMs > 75000;
 
-    if ((isInitialTick || (isNewMinute && isPreFireWindow)) && !state.isFetching) {
+    // Interval bertahap (adaptive backoff): 2 menit di awal, lalu 5 menit jika hening lama (pasar sepi/tutup)
+    const requiredIntervalMs = silentMs > 300000 ? 300000 : 120000;
+    const timeSinceLastWatchdog = Date.now() - (state.lastWatchdogFetchTime || 0);
+
+    if (isNewMinute && isPusherSilent && !state.isFetching && timeSinceLastWatchdog >= requiredIntervalMs) {
         state.lastAutoFetchMinute = currentMinuteBucket;
-        debugLog(`Pre-fire auto-fetch detik ${serverSeconds}.${Math.floor(serverMs / 100)}s (Waktu Server: ${formatTimeIdHms(serverNow)})`);
-
-        state.isAutoFetching = true;
-        state.isRetrying = true;
-        state.retryCount = 0;
-        state.targetMinute = null;
-        clearRetryTimeout();
-
+        state.lastWatchdogFetchTime = Date.now();
+        debugLog(`Watchdog: WebSocket hening ${(silentMs / 1000).toFixed(0)}s, mengambil data fallback REST (interval: ${requiredIntervalMs / 1000}s)...`);
         fetchHarga();
     }
 }
