@@ -246,7 +246,7 @@ const ids = [
     'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
     'simulationResults', 'noSimulation',
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
-    'refreshApiBtn', 'themeText', 'bigRefreshBtn',
+    'refreshApiBtn', 'themeText',
     'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
     'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
     'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'installPwaBtn', 'tvIframe',
@@ -264,7 +264,7 @@ const ids = [
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
 });
-dom.bigRefreshIcon = dom.bigRefreshBtn?.querySelector('svg');
+
 
 // Render cached data immediately
 loadPriceHistory();
@@ -444,7 +444,7 @@ function renderPriceChangeIndicator(el, current, previous) {
         : 'M7 7l10 10m0-9v9H8';
     const label = change > 0 ? 'Harga naik' : 'Harga turun';
     const direction = change > 0 ? 'price-change-up' : 'price-change-down';
-    const formattedChange = `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+    const formattedChange = formatRupiah(Math.abs(change));
     el.innerHTML = `
         <svg class="price-change-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="${arrowPath}"></path>
@@ -592,7 +592,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
                     : 'M6 12h12';
             const updated = parseTreasuryDate(item.updated);
             const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
-            const formattedDiff = change === 0 ? formatRupiah(0) : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+            const formattedDiff = formatRupiah(Math.abs(change));
 
             return `
             <div class="price-history-item price-history-item--clickable" data-price="${value}" data-type="${type}" data-time="${item.updated}" role="button" tabindex="0" title="Klik untuk simulasi ${type === 'buy' ? 'beli' : 'jual'} Rp ${value.toLocaleString('id-ID')}">
@@ -1538,10 +1538,7 @@ function handleTreasuryPusherEvent(raw) {
             renderUsdIdrTreasuryWs(payload.usdidr);
         }
 
-        // 4. Pastikan ikon refresh berhenti berputar seketika
-        if (dom.bigRefreshIcon) {
-            dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
-        }
+
 
         state.isFetching = false;
         state.isAutoFetching = false;
@@ -1599,9 +1596,6 @@ function triggerManualRefresh() {
     if (pusherState === 'connected') {
         debugLog('Manual Refresh: WebSocket sudah Live WS aktif, tidak perlu menembak REST API WordPress.');
         setTimeout(() => {
-            if (dom.bigRefreshIcon) {
-                dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
-            }
             state.isManualRefresh = false;
         }, 500);
         return;
@@ -2025,31 +2019,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.refreshApiBtn.addEventListener('click', triggerManualRefresh);
     }
 
-    // Big refresh button
-    if (dom.bigRefreshBtn) {
-        if (!dom.bigRefreshIcon) {
-            dom.bigRefreshIcon = dom.bigRefreshBtn.querySelector('svg');
-        }
 
-        const resetSpin = () => {
-            if (dom.bigRefreshIcon) {
-                dom.bigRefreshIcon.classList.remove('refresh-spin-once');
-            }
-        };
-
-        if (dom.bigRefreshIcon) {
-            dom.bigRefreshIcon.addEventListener('animationend', resetSpin);
-        }
-
-        dom.bigRefreshBtn.addEventListener('click', () => {
-            if (dom.bigRefreshIcon) {
-                dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
-                void dom.bigRefreshIcon.getBoundingClientRect();
-                dom.bigRefreshIcon.classList.add('refresh-spin-once');
-            }
-            triggerManualRefresh();
-        });
-    }
 
     if (dom.settingsBtn) {
         dom.settingsBtn.addEventListener('click', (e) => {
@@ -2340,9 +2310,7 @@ async function fetchHarga(force = false) {
     state.isFetching = true;
     state.lastFetchTime = Date.now();
 
-    if (dom.bigRefreshIcon) {
-        dom.bigRefreshIcon.classList.add('refresh-spin');
-    }
+
 
     // Cancel previous fetch
     if (state.fetchController) {
@@ -2476,10 +2444,7 @@ async function fetchHarga(force = false) {
         state.isRetrying = false;
         clearRetryTimeout();
 
-        // Pastikan animasi tombol berputar dihentikan seketika setelah fetch selesai
-        if (dom.bigRefreshIcon) {
-            dom.bigRefreshIcon.classList.remove('refresh-spin', 'refresh-spin-once');
-        }
+
     }
 }
 
@@ -2946,7 +2911,7 @@ function renderProfitHistoryDropdown(mode, forceRender = false) {
                     ? 'M7 7l10 10m0-9v9H8'
                     : 'M6 12h12';
 
-            const formattedChange = change === 0 ? 'Rp 0' : `${change > 0 ? '+' : '-'}${formatRupiah(Math.abs(change))}`;
+            const formattedChange = formatRupiah(Math.abs(change));
             const formattedValue = value === 0 ? formatRupiah(0) : (value > 0 ? `+${formatRupiah(value)}` : formatRupiah(value));
 
             return `
