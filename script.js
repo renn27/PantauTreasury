@@ -186,14 +186,16 @@ let simStatusSlots = null;
 const formatRupiah = new Intl.NumberFormat('id-ID', {
     style: 'currency', currency: 'IDR', maximumFractionDigits: 0
 }).format;
-const formatTimeId = new Intl.DateTimeFormat('id-ID').format;
+const formatTimeId = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta' }).format;
 const formatTimeIdHms = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false
 }).format;
 const formatTimeIdHm = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false
@@ -202,6 +204,26 @@ const formatUsdIdrRate = new Intl.NumberFormat('id-ID', {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4
 }).format;
+
+const wibDateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+});
+
+const serverDateFormatter = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+});
+
+function getWibDateStr(date = null) {
+    const target = date ? (date instanceof Date ? date : parseTreasuryDate(date)) : getServerNow();
+    if (!target || Number.isNaN(target.getTime())) return '';
+    return wibDateFormatter.format(target);
+}
 
 function formatMinuteOnly(val) {
     if (!val) return '-';
@@ -219,19 +241,7 @@ function formatMinuteOnly(val) {
         }
     }
 
-    // Parsing Date (menangani ISO String seperti "2026-08-26T13:29:01.000Z", timestamp ms, dll)
-    let d = null;
-    if (val instanceof Date) {
-        d = val;
-    } else if (typeof val === 'number') {
-        d = new Date(val);
-    } else if (typeof val === 'string') {
-        d = new Date(val);
-        if (Number.isNaN(d.getTime()) && val.includes(' ')) {
-            d = new Date(val.replace(' ', 'T'));
-        }
-    }
-
+    const d = val instanceof Date ? val : parseTreasuryDate(val);
     if (d && !Number.isNaN(d.getTime())) {
         return formatTimeIdHm(d).replace(':', '.');
     }
@@ -291,7 +301,8 @@ function debugLog(...args) {
 }
 
 function floor4(num) {
-    return Math.floor(num * 10000) / 10000;
+    if (!Number.isFinite(num)) return 0;
+    return Math.floor((Number(num) + 1e-9) * 10000) / 10000;
 }
 
 function fastParse(str) {
@@ -315,28 +326,35 @@ function parsePositiveFloat(rawValue) {
 
 /**
  * Normalisasi dan parse string tanggal Treasury (misal: "2026-09-05 12:40:02")
- * Menghasilkan Date object valid dengan zona waktu WIB (UTC+7) yang aman untuk Safari/iOS & lintas zona waktu
+ * Menghasilkan Date object valid dengan zona waktu WIB (UTC+7) yang aman untuk Safari/iOS & lintas zona waktu.
+ * Mengembalikan null jika input tidak valid / korup agar tidak mengaburkan data.
  */
 function parseTreasuryDate(dateStr) {
-    if (!dateStr) return new Date();
-    if (dateStr instanceof Date) return dateStr;
-    if (typeof dateStr === 'number') return new Date(dateStr);
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return Number.isNaN(dateStr.getTime()) ? null : dateStr;
+    if (typeof dateStr === 'number') {
+        const d = new Date(dateStr);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
 
     const cleanStr = String(dateStr).trim();
     if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(cleanStr)) {
-        return new Date(cleanStr.replace(' ', 'T') + '+07:00');
+        const d = new Date(cleanStr.replace(' ', 'T') + '+07:00');
+        return Number.isNaN(d.getTime()) ? null : d;
     }
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(cleanStr)) {
-        return new Date(cleanStr + '+07:00');
+        const d = new Date(cleanStr + '+07:00');
+        return Number.isNaN(d.getTime()) ? null : d;
     }
     const d = new Date(cleanStr);
-    return Number.isNaN(d.getTime()) ? new Date() : d;
+    return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function isSameMinuteBucket(a, b) {
     if (!a || !b) return false;
     const dateA = a instanceof Date ? a : parseTreasuryDate(a);
-    const dateB = b instanceof Date ? b : new Date(b);
+    const dateB = b instanceof Date ? b : parseTreasuryDate(b);
+    if (!dateA || !dateB) return false;
     const timeA = dateA.getTime();
     const timeB = dateB.getTime();
     if (Number.isNaN(timeA) || Number.isNaN(timeB)) return false;
@@ -358,6 +376,7 @@ function getSimulationStorageKey() {
         sim.buyPrice || '',
         sim.sellPrice || '',
         sim.gram !== null && sim.gram !== undefined ? Number(sim.gram).toFixed(6) : '',
+        Boolean(sim.isManual),
         sim.time || '',
         sim.startTime || '',
         historyLen
@@ -463,12 +482,14 @@ function renderPriceChangeIndicator(el, current, previous) {
 }
 
 function getPriceHistoryStorageKey() {
-    return 'treasury_price_history';
+    const today = getWibDateStr();
+    return today ? `treasury_price_history_${today}` : 'treasury_price_history';
 }
 
 function dedupePriceHistory(history) {
     if (!Array.isArray(history)) return [];
 
+    const todayStr = getWibDateStr();
     const seenMinutes = new Map();
 
     for (const item of history) {
@@ -478,12 +499,18 @@ function dedupePriceHistory(history) {
         if (!Number.isFinite(buy) || !Number.isFinite(sell) || !rawTimeStr) continue;
 
         const dateObj = parseTreasuryDate(rawTimeStr);
-        if (Number.isNaN(dateObj.getTime())) continue;
+        if (!dateObj || Number.isNaN(dateObj.getTime())) continue;
+
+        // Hanya sertakan riwayat untuk hari ini (WIB) agar tidak tercampur dengan hari kemarin
+        if (todayStr && getWibDateStr(dateObj) !== todayStr) {
+            continue;
+        }
 
         // Key keunikan per menit (1 menit = 60.000 ms) agar ada riwayat lengkap setiap menitnya
         const minuteKey = Math.floor(dateObj.getTime() / 60000);
         const existing = seenMinutes.get(minuteKey);
-        if (!existing || dateObj.getTime() >= parseTreasuryDate(existing.updated).getTime()) {
+        const existingDate = existing ? parseTreasuryDate(existing.updated) : null;
+        if (!existing || !existingDate || dateObj.getTime() >= existingDate.getTime()) {
             seenMinutes.set(minuteKey, {
                 buy,
                 sell,
@@ -493,14 +520,32 @@ function dedupePriceHistory(history) {
     }
 
     const result = Array.from(seenMinutes.values());
-    result.sort((a, b) => parseTreasuryDate(a.updated).getTime() - parseTreasuryDate(b.updated).getTime());
+    result.sort((a, b) => {
+        const tA = parseTreasuryDate(a.updated)?.getTime() || 0;
+        const tB = parseTreasuryDate(b.updated)?.getTime() || 0;
+        return tA - tB;
+    });
     return result.slice(-PRICE_HISTORY_LIMIT);
 }
 
 function loadPriceHistory() {
     try {
-        const saved = localStorage.getItem(getPriceHistoryStorageKey());
-        if (!saved) return;
+        const todayKey = getPriceHistoryStorageKey();
+        let saved = localStorage.getItem(todayKey);
+
+        if (!saved) {
+            const legacy = localStorage.getItem('treasury_price_history');
+            if (legacy) {
+                const parsedLegacy = JSON.parse(legacy);
+                if (Array.isArray(parsedLegacy)) {
+                    state.priceHistory = dedupePriceHistory(parsedLegacy);
+                    savePriceHistory();
+                    return;
+                }
+            }
+            return;
+        }
+
         const parsed = JSON.parse(saved);
         if (!Array.isArray(parsed)) return;
 
@@ -524,7 +569,7 @@ function addPriceHistoryEntry(data) {
     if (!Number.isFinite(buy) || !Number.isFinite(sell) || !data.updated) return;
 
     const dateParsed = parseTreasuryDate(data.updated);
-    if (Number.isNaN(dateParsed.getTime())) return;
+    if (!dateParsed || Number.isNaN(dateParsed.getTime())) return;
 
     const currentHistory = state.priceHistory || [];
     const newMinuteKey = Math.floor(dateParsed.getTime() / 60000);
@@ -533,7 +578,7 @@ function addPriceHistoryEntry(data) {
     if (currentHistory.length > 0) {
         const lastEntry = currentHistory[currentHistory.length - 1];
         const lastDate = parseTreasuryDate(lastEntry.updated);
-        const lastMinuteKey = Math.floor(lastDate.getTime() / 60000);
+        const lastMinuteKey = lastDate ? Math.floor(lastDate.getTime() / 60000) : -1;
 
         if (lastMinuteKey === newMinuteKey && Number(lastEntry.buy) === buy && Number(lastEntry.sell) === sell) {
             // Sudah ada entri untuk menit ini dan harganya sama, tidak perlu menduplikasi
@@ -674,13 +719,17 @@ function syncSimulationProfitHistory() {
         let gramDiff = 0;
 
         if (isBuy) {
-            const markedGram = floor4(SIMULATION_BUY_BASE / price);
+            const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+                ? Number(state.simulation.gram)
+                : floor4(SIMULATION_BUY_BASE / price);
             const currentGram = floor4(SIMULATION_SELL_BASE / hSell);
             gramDiff = floor4(markedGram - currentGram);
             const nilaiJual = markedGram * hSell;
             profitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
         } else {
-            const markedGram = floor4(SIMULATION_SELL_BASE / price);
+            const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+                ? Number(state.simulation.gram)
+                : floor4(SIMULATION_SELL_BASE / price);
             const currentGram = floor4(SIMULATION_BUY_BASE / hBuy);
             gramDiff = floor4(currentGram - markedGram);
             profitLoss = Math.round(gramDiff * hSell);
@@ -701,13 +750,17 @@ function syncSimulationProfitHistory() {
         let liveProfitLoss = 0;
         let liveGramDiff = 0;
         if (isBuy) {
-            const markedGram = floor4(SIMULATION_BUY_BASE / price);
+            const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+                ? Number(state.simulation.gram)
+                : floor4(SIMULATION_BUY_BASE / price);
             const currentGram = floor4(SIMULATION_SELL_BASE / liveSell);
             liveGramDiff = floor4(markedGram - currentGram);
             const nilaiJual = markedGram * liveSell;
             liveProfitLoss = Math.round(nilaiJual - SIMULATION_SELL_BASE);
         } else {
-            const markedGram = floor4(SIMULATION_SELL_BASE / price);
+            const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+                ? Number(state.simulation.gram)
+                : floor4(SIMULATION_SELL_BASE / price);
             const currentGram = floor4(SIMULATION_BUY_BASE / liveBuy);
             liveGramDiff = floor4(currentGram - markedGram);
             liveProfitLoss = Math.round(liveGramDiff * liveSell);
@@ -745,6 +798,7 @@ function simulateFromHistory(type, price, updatedTime) {
     state.simulation.buyPrice = isBuy ? price : null;
     state.simulation.sellPrice = !isBuy ? price : null;
     state.simulation.mode = mode;
+    state.simulation.isManual = false;
     state.simulation.startTime = updatedTime || null;
     state.simulation.time = updatedTime ? formatMinuteOnly(updatedTime) : formatMinuteOnly(getServerNow());
 
@@ -1308,7 +1362,7 @@ function mergeGoldHistory(incomingHistory) {
         if (!updated && item.time) {
             const timeStr = String(item.time).trim();
             if (timeStr.includes(':')) {
-                const todayStr = new Date().toISOString().slice(0, 10);
+                const todayStr = getWibDateStr();
                 updated = `${todayStr} ${timeStr}`;
             } else {
                 updated = timeStr;
@@ -1319,7 +1373,7 @@ function mergeGoldHistory(incomingHistory) {
             sell: Number(item.sell),
             updated: updated
         };
-    }).filter(item => item.buy > 0 && item.sell > 0 && item.updated);
+    }).filter(item => item.buy > 0 && item.sell > 0 && item.updated && parseTreasuryDate(item.updated));
 
     const merged = dedupePriceHistory([...currentHistory, ...formattedIncoming]);
     const isDifferent = merged.length !== currentHistory.length ||
@@ -2025,6 +2079,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.mode = 'buy';
                 state.simulation.time = timeStr;
                 state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
+                state.simulation.isManual = false;
                 state.simulation.gram = SIMULATION_BUY_BASE / price;
 
                 dom.markBuyBtn.classList.add('simulation-active');
@@ -2051,6 +2106,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.simulation.mode = 'sell';
                 state.simulation.time = timeStr;
                 state.simulation.startTime = currentPriceObj?.updated || new Date().toISOString();
+                state.simulation.isManual = false;
                 state.simulation.gram = SIMULATION_SELL_BASE / price;
 
                 dom.markSellBtn.classList.add('simulation-active');
@@ -2835,6 +2891,7 @@ function applyManualGramSimulation(mode) {
     }
 
     state.simulation.gram = gram;
+    state.simulation.isManual = true;
     saveSimulationToStorage();
     updateSimulation();
     return true;
@@ -3070,7 +3127,9 @@ function updateSimulation(skipAddHistory = false) {
 
     if (mode === 'buy' && state.simulation.buyPrice) {
 
-        const markedGram = floor4(SIMULATION_BUY_BASE / state.simulation.buyPrice);
+        const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+            ? Number(state.simulation.gram)
+            : floor4(SIMULATION_BUY_BASE / state.simulation.buyPrice);
         state.simulation.gram = markedGram;
         const currentGram = floor4(SIMULATION_SELL_BASE / sell);
         const gramDiff = floor4(markedGram - currentGram);
@@ -3092,7 +3151,9 @@ function updateSimulation(skipAddHistory = false) {
 
     } else if (mode === 'sell' && state.simulation.sellPrice) {
 
-        const markedGram = floor4(SIMULATION_SELL_BASE / state.simulation.sellPrice);
+        const markedGram = (state.simulation.isManual && Number.isFinite(Number(state.simulation.gram)) && Number(state.simulation.gram) > 0)
+            ? Number(state.simulation.gram)
+            : floor4(SIMULATION_SELL_BASE / state.simulation.sellPrice);
         state.simulation.gram = markedGram;
         const currentGram = floor4(SIMULATION_BUY_BASE / buy);
         const gramDiff = floor4(currentGram - markedGram);
@@ -3150,6 +3211,7 @@ function loadSimulationFromStorage() {
             const parsed = JSON.parse(saved);
             if (Date.now() - parsed.timestamp < SIMULATION_TTL_MS) {
                 state.simulation = parsed.simulation || {};
+                state.simulation.isManual = Boolean(state.simulation.isManual);
                 state.simulation.profitHistory = dedupeProfitHistory(state.simulation.profitHistory);
                 state.lastSimulationStorageKey = getSimulationStorageKey();
                 state.simulationStorageLastSavedAt = Number(parsed.timestamp) || Date.now();
@@ -3193,6 +3255,7 @@ function clearSimulation() {
         sellPrice: null,
         mode: null,
         gram: null,
+        isManual: false,
         time: null,
         startTime: null,
         profitHistory: []
@@ -3375,22 +3438,17 @@ function tickTimers() {
 function updateServerClock(serverNow) {
     if (!dom.serverClockHms) return;
 
-    const hours = String(serverNow.getHours()).padStart(2, '0');
-    const minutes = String(serverNow.getMinutes()).padStart(2, '0');
-    const seconds = String(serverNow.getSeconds()).padStart(2, '0');
-    const timeStr = `${hours}:${minutes}:${seconds}`;
+    const timeStr = formatTimeIdHms(serverNow).replace(/\./g, ':');
 
     if (dom.serverClockHms.textContent !== timeStr) {
         dom.serverClockHms.textContent = timeStr;
     }
 
     if (dom.serverClockDate) {
-        const dayKey = `${serverNow.getFullYear()}-${serverNow.getMonth()}-${serverNow.getDate()}`;
+        const dayKey = getWibDateStr(serverNow);
         if (state._lastClockDayKey !== dayKey) {
             state._lastClockDayKey = dayKey;
-            const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-            const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-            dom.serverClockDate.textContent = `${dayNames[serverNow.getDay()]}, ${serverNow.getDate()} ${monthNames[serverNow.getMonth()]}`;
+            dom.serverClockDate.textContent = serverDateFormatter.format(serverNow);
         }
     }
 

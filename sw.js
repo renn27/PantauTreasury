@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.10.17.2';
+const CACHE_NAME = 'pantau-treasury-v26.10.17.3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -75,7 +75,14 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Silent fallback on network error
+          // Fallback saat network offline dan aset belum tersimpan di cache
+          if (!cachedResponse) {
+            return new Response('Offline', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'text/plain' }
+            });
+          }
         });
 
       return cachedResponse || fetchPromise;
