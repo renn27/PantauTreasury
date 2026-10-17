@@ -77,7 +77,6 @@ let state = {
     timerTicker: null,
     fetchController: null,
     isAutoFetching: false,
-    isManualRefresh: false,
     retryCount: 0,
     MAX_RETRY: 5,
     simulation: {
@@ -246,10 +245,10 @@ const ids = [
     'gramBeli', 'gramJual', 'nilaiJual', 'cuan', 'lastUpdate',
     'simulationResults', 'noSimulation',
     'simulationStatus', 'markBuyBtn', 'markSellBtn',
-    'refreshApiBtn', 'themeText',
-    'chartWidthBtn', 'chartWidthMenu', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
+    'themeText',
+    'chartWidthBtn', 'chartWidthMenu', 'chartWidthSubmenuWrapper', 'settingsBtn', 'settingsMenu', 'dashboardGrid',
     'leftPanel', 'rightPanel', 'clearSimulationBtn', 'simulationTimestamp',
-    'darkModeBtn', 'refreshIframeBtn', 'fullscreenBtn', 'installPwaBtn', 'tvIframe',
+    'darkModeBtn', 'themeIconPath', 'fullscreenBtn', 'installPwaBtn', 'tvIframe', 'chartSkeleton',
     'serverClockHms', 'serverClockDate', 'serverClockOffset',
     'manualGramInput', 'manualGramError', 'applyManualBuyBtn', 'applyManualSellBtn',
     'manualBuyPricePreview', 'manualSellPricePreview',
@@ -400,19 +399,27 @@ function renderPriceValue(el, current, previous) {
     });
 }
 
-function getPreviousDistinctPrice(type, currentPrice) {
+function getPreviousPriceForIndicator(type, currentPrice) {
     const history = state.priceHistory || [];
     const valueKey = type === 'buy' ? 'buy' : 'sell';
+    if (!history.length) return null;
 
-    // Scan backward to find the first price that is different from currentPrice
-    for (let i = history.length - 1; i >= 0; i--) {
-        const val = Number(history[i][valueKey]);
-        if (Number.isFinite(val) && val !== currentPrice) {
-            return val;
+    const lastIdx = history.length - 1;
+    const lastVal = Number(history[lastIdx][valueKey]);
+
+    // Jika entri terakhir di riwayat adalah harga saat ini dan ada entri sebelumnya di riwayat
+    if (lastVal === currentPrice) {
+        if (lastIdx > 0) {
+            const prevVal = Number(history[lastIdx - 1][valueKey]);
+            return Number.isFinite(prevVal) ? prevVal : null;
         }
+        return null;
     }
-    return null;
+
+    // Jika entri terakhir di riwayat adalah harga sebelumnya
+    return Number.isFinite(lastVal) ? lastVal : null;
 }
+const getPreviousDistinctPrice = getPreviousPriceForIndicator;
 
 function renderPriceChangeIndicator(el, current, previous) {
     if (!el) return;
@@ -473,7 +480,7 @@ function dedupePriceHistory(history) {
         const dateObj = parseTreasuryDate(rawTimeStr);
         if (Number.isNaN(dateObj.getTime())) continue;
 
-        // Key keunikan berdasarkan menit timestamp (1 menit = 60.000 ms)
+        // Key keunikan per menit (1 menit = 60.000 ms) agar ada riwayat lengkap setiap menitnya
         const minuteKey = Math.floor(dateObj.getTime() / 60000);
         const existing = seenMinutes.get(minuteKey);
         if (!existing || dateObj.getTime() >= parseTreasuryDate(existing.updated).getTime()) {
@@ -520,21 +527,25 @@ function addPriceHistoryEntry(data) {
     if (Number.isNaN(dateParsed.getTime())) return;
 
     const currentHistory = state.priceHistory || [];
+    const newMinuteKey = Math.floor(dateParsed.getTime() / 60000);
+
+    // Cek apakah sudah ada entri di menit yang sama dengan harga yang sama
+    if (currentHistory.length > 0) {
+        const lastEntry = currentHistory[currentHistory.length - 1];
+        const lastDate = parseTreasuryDate(lastEntry.updated);
+        const lastMinuteKey = Math.floor(lastDate.getTime() / 60000);
+
+        if (lastMinuteKey === newMinuteKey && Number(lastEntry.buy) === buy && Number(lastEntry.sell) === sell) {
+            // Sudah ada entri untuk menit ini dan harganya sama, tidak perlu menduplikasi
+            return;
+        }
+    }
+
     const newHistory = dedupePriceHistory([...currentHistory, {
         buy,
         sell,
         updated: dateParsed.toISOString()
     }]);
-
-    const isSame = newHistory.length === currentHistory.length &&
-        newHistory.length > 0 && currentHistory.length > 0 &&
-        newHistory[newHistory.length - 1].updated === currentHistory[currentHistory.length - 1].updated &&
-        newHistory[newHistory.length - 1].buy === currentHistory[currentHistory.length - 1].buy &&
-        newHistory[newHistory.length - 1].sell === currentHistory[currentHistory.length - 1].sell;
-
-    if (isSame) {
-        return;
-    }
 
     state.priceHistory = newHistory.slice(-PRICE_HISTORY_LIMIT);
     savePriceHistory();
@@ -577,7 +588,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
         .reverse()
         .map((item, index, reversed) => {
             const value = Number(item[valueKey]);
-            const nextOlder = reversed.slice(index + 1).find(older => Number(older[valueKey]) !== value);
+            const nextOlder = reversed[index + 1];
             const prevValue = nextOlder ? Number(nextOlder[valueKey]) : null;
             const change = prevValue !== null ? value - prevValue : 0;
             const directionClass = change > 0
@@ -591,7 +602,7 @@ function renderPriceHistoryDropdown(type, forceRender = false) {
                     ? 'M7 7l10 10m0-9v9H8'
                     : 'M6 12h12';
             const updated = parseTreasuryDate(item.updated);
-            const time = Number.isNaN(updated.getTime()) ? '-' : formatTimeIdHms(updated);
+            const time = Number.isNaN(updated.getTime()) ? '-' : formatMinuteOnly(updated);
             const formattedDiff = formatRupiah(Math.abs(change));
 
             return `
@@ -1578,37 +1589,6 @@ function renderDerivedValues(values) {
     }
 }
 
-/* ================= SHARED: Manual Refresh ================= */
-function triggerManualRefresh() {
-    state.isManualRefresh = true;
-    state.isAutoFetching = false;
-    state.isRetrying = false;
-    state.retryCount = 0;
-    state.targetMinute = null;
-    clearRetryTimeout();
-
-    // 1. Selalu sinkronkan jam server resmi dan kurs USD/IDR
-    syncServerClock();
-    connectUsdIdrFeed();
-
-    // 2. Cek koneksi Pusher WebSocket (Realtime Live Engine)
-    const pusherState = state.treasuryPusher?.connection?.state;
-    if (pusherState === 'connected') {
-        debugLog('Manual Refresh: WebSocket sudah Live WS aktif, tidak perlu menembak REST API WordPress.');
-        setTimeout(() => {
-            state.isManualRefresh = false;
-        }, 500);
-        return;
-    }
-
-    // 3. Jika Pusher belum connected / terputus, coba sambungkan ulang & fetch fallback
-    if (state.treasuryPusher && pusherState !== 'connected') {
-        state.treasuryPusher.connect();
-    }
-
-    if (state.fetchController) state.fetchController.abort();
-    fetchHarga(true);
-}
 
 /* ================= SHARED: Button Feedback ================= */
 function showButtonFeedback(btn, type, duration) {
@@ -1712,8 +1692,8 @@ function renderCachedData() {
     state.lastRenderedSell = sell;
     state.currentBuy = buy;
     state.currentSell = sell;
-    const displayPrevBuy = getPreviousDistinctPrice('buy', buy);
-    const displayPrevSell = getPreviousDistinctPrice('sell', sell);
+    const displayPrevBuy = getPreviousPriceForIndicator('buy', buy);
+    const displayPrevSell = getPreviousPriceForIndicator('sell', sell);
     renderPriceChangeIndicator(dom.hargaBeliChange, buy, displayPrevBuy);
     renderPriceChangeIndicator(dom.hargaJualChange, sell, displayPrevSell);
 
@@ -1829,11 +1809,27 @@ function fixTradingViewTouch() {
     tvIframe.addEventListener('touchcancel', resetTouchState);
 }
 
+const THEME_ICONS = {
+    moon: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z',
+    sun: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z'
+};
+
 function updateThemeButtonText(isDark) {
+    if (dom.themeIconPath) {
+        dom.themeIconPath.setAttribute('d', isDark ? THEME_ICONS.sun : THEME_ICONS.moon);
+    }
+    if (dom.darkModeBtn) {
+        dom.darkModeBtn.setAttribute('title', isDark ? 'Mode Terang (Light)' : 'Mode Gelap (Dark)');
+        dom.darkModeBtn.setAttribute('aria-label', isDark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap');
+    }
     if (dom.themeText) {
         dom.themeText.textContent = isDark ? 'Light' : 'Dark';
     }
 }
+
+/* ================= TRADINGVIEW WIDGET OPTIMIZATION ================= */
+let savedTvSrc = null;
+let tvSuspendTimeoutId = null;
 
 function syncTradingViewTheme(isDark) {
     const tvIframe = dom.tvIframe;
@@ -1841,16 +1837,85 @@ function syncTradingViewTheme(isDark) {
 
     const nextTheme = isDark ? 'dark' : 'light';
     const templateSrc = tvIframe.dataset?.src;
-    if (templateSrc) {
-        const nextSrc = templateSrc.replace('{theme}', nextTheme);
-        if (tvIframe.src !== nextSrc) {
-            tvIframe.src = nextSrc;
-        }
+
+    // Jika sedang dalam status suspend, update savedTvSrc agar saat restore tetap sesuai tema baru
+    if (savedTvSrc) {
+        savedTvSrc = savedTvSrc.replace(/theme=\w+/, `theme=${nextTheme}`);
+    }
+
+    // Jika chart belum pernah dimuat (masih lazy / belum scroll ke viewport di HP), jangan paksa download iframe
+    const currentSrc = tvIframe.getAttribute('src');
+    if (!currentSrc || currentSrc === 'about:blank') {
         return;
     }
 
-    if (tvIframe.src) {
-        tvIframe.src = tvIframe.src.replace(/theme=\w+/, `theme=${nextTheme}`);
+    let nextSrc = '';
+    if (templateSrc) {
+        nextSrc = templateSrc.replace('{theme}', nextTheme);
+    } else if (tvIframe.src) {
+        nextSrc = tvIframe.src.replace(/theme=\w+/, `theme=${nextTheme}`);
+    }
+
+    if (nextSrc && tvIframe.src !== nextSrc) {
+        // Transisi halus: fade out sedikit agar tidak ada flicker/flashbang putih yang menyilaukan
+        tvIframe.style.opacity = '0.35';
+        const onLoaded = () => {
+            tvIframe.style.opacity = '1';
+            tvIframe.removeEventListener('load', onLoaded);
+        };
+        tvIframe.addEventListener('load', onLoaded, { once: true });
+        tvIframe.src = nextSrc;
+    }
+}
+
+function initTradingViewLazy() {
+    const tvIframe = dom.tvIframe;
+    const chartContainer = document.querySelector('.chart-container');
+    if (!tvIframe || !chartContainer) return;
+
+    let hasLoaded = false;
+    const loadChart = () => {
+        if (hasLoaded) return;
+        hasLoaded = true;
+
+        const isDark = document.documentElement.classList.contains('dark');
+        const theme = isDark ? 'dark' : 'light';
+        const templateSrc = tvIframe.dataset?.src;
+        if (templateSrc) {
+            tvIframe.src = templateSrc.replace('{theme}', theme);
+        }
+
+        const onChartLoaded = () => {
+            tvIframe.classList.remove('opacity-0');
+            tvIframe.classList.add('opacity-100');
+            tvIframe.style.opacity = '1';
+            if (dom.chartSkeleton) {
+                dom.chartSkeleton.classList.add('opacity-0');
+            }
+            setTimeout(fixTradingViewTouch, 300);
+        };
+
+        tvIframe.addEventListener('load', onChartLoaded, { once: true });
+    };
+
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    loadChart();
+                    obs.unobserve(entry.target);
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '200px 0px', // Pre-load 200px sebelum masuk viewport di mobile
+            threshold: 0
+        });
+
+        observer.observe(chartContainer);
+    } else {
+        // Fallback browser lama
+        loadChart();
     }
 }
 
@@ -1866,22 +1931,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedWidth) {
         state.chartWidth = savedWidth;
         applyChartWidth(savedWidth);
+    } else {
+        updateActiveChartWidthUI(state.chartWidth || '1/4');
     }
 
     const initialIsDark = document.documentElement.classList.contains('dark');
     updateThemeButtonText(initialIsDark);
 
-    // Defer TradingView iframe initialization to window load to prevent blocking initial paints and avoid double loading
-    const initTradingViewIframe = () => {
-        if (dom.tvIframe && !dom.tvIframe.getAttribute('src')) {
-            syncTradingViewTheme(initialIsDark);
-        }
-    };
-
+    // Inisialisasi TradingView secara pintar & lazy (Intersection Observer 200px)
     if (document.readyState === 'complete') {
-        initTradingViewIframe();
+        initTradingViewLazy();
     } else {
-        window.addEventListener('load', initTradingViewIframe);
+        window.addEventListener('load', initTradingViewLazy);
     }
 
     // Bind events
@@ -2015,9 +2076,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateManualPricePreview();
 
-    if (dom.refreshApiBtn) {
-        dom.refreshApiBtn.addEventListener('click', triggerManualRefresh);
-    }
 
 
 
@@ -2032,8 +2090,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dom.settingsMenu) {
         dom.settingsMenu.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (e.target.closest('#chartWidthBtn') || e.target.closest('#chartWidthMenu')) {
+                return;
+            }
             if (e.target.closest('.settings-menu-item')) {
-                setTimeout(() => dom.settingsMenu.classList.add('hidden'), 0);
+                setTimeout(() => {
+                    dom.settingsMenu?.classList.add('hidden');
+                    dom.chartWidthMenu?.classList.add('hidden');
+                }, 0);
             }
         });
     }
@@ -2079,13 +2143,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Chart width controls
+    // Chart width controls (Flyout Submenu inside Settings)
+    let chartWidthSubmenuTimer = null;
+    const submenuWrapper = dom.chartWidthSubmenuWrapper || document.getElementById('chartWidthSubmenuWrapper');
+
+    if (submenuWrapper) {
+        submenuWrapper.addEventListener('mouseenter', () => {
+            if (chartWidthSubmenuTimer) {
+                clearTimeout(chartWidthSubmenuTimer);
+                chartWidthSubmenuTimer = null;
+            }
+            dom.chartWidthMenu?.classList.remove('hidden');
+        });
+
+        submenuWrapper.addEventListener('mouseleave', () => {
+            chartWidthSubmenuTimer = setTimeout(() => {
+                dom.chartWidthMenu?.classList.add('hidden');
+            }, 200);
+        });
+    }
+
     if (dom.chartWidthBtn) {
         dom.chartWidthBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const menu = dom.chartWidthMenu;
-            menu.classList.toggle('hidden');
-            dom.settingsMenu?.classList.add('hidden');
+            if (chartWidthSubmenuTimer) {
+                clearTimeout(chartWidthSubmenuTimer);
+                chartWidthSubmenuTimer = null;
+            }
+            dom.chartWidthMenu?.classList.toggle('hidden');
         });
     }
 
@@ -2096,10 +2181,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const widthButtons = dom.chartWidthMenu.querySelectorAll('button[data-width]');
         widthButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const width = btn.getAttribute('data-width');
                 applyChartWidth(width);
-                dom.chartWidthMenu.classList.add('hidden');
+                dom.chartWidthMenu?.classList.add('hidden');
+                dom.settingsMenu?.classList.add('hidden');
             });
         });
     }
@@ -2135,10 +2222,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Other buttons
-    dom.refreshIframeBtn?.addEventListener('click', () => {
-        const tvIframe = dom.tvIframe;
-        if (tvIframe) tvIframe.src = tvIframe.src;
-    });
 
     dom.fullscreenBtn?.addEventListener('click', () => {
         if (!document.fullscreenElement) {
@@ -2186,9 +2269,6 @@ document.addEventListener('DOMContentLoaded', () => {
     connectUsdIdrFeed();
 
     // Pause/resume timer dan TradingView suspend saat tab hidden/visible
-    let tvSuspendTimeoutId = null;
-    let savedTvSrc = null;
-
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             if (state.timerTicker) {
@@ -2197,15 +2277,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             closeUsdIdrFeed();
 
-            // Suspend TradingView WebGL/WebSocket jika tablet tidur/terkunci > 90 detik (hemat baterai & RAM)
+            // Suspend TradingView WebGL/WebSocket jika tablet tidur/terkunci > 30 detik (hemat baterai & RAM)
             if (dom.tvIframe && dom.tvIframe.src && dom.tvIframe.src !== 'about:blank') {
                 tvSuspendTimeoutId = setTimeout(() => {
                     if (document.hidden && dom.tvIframe) {
                         savedTvSrc = dom.tvIframe.src;
                         dom.tvIframe.src = 'about:blank';
-                        debugLog('TradingView suspended (hemat baterai & RAM tablet)');
+                        debugLog('TradingView suspended (hemat baterai & RAM tablet/HP)');
                     }
-                }, 90000);
+                }, 30000);
             }
         } else {
             if (tvSuspendTimeoutId) {
@@ -2213,8 +2293,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 tvSuspendTimeoutId = null;
             }
 
-            // Pulihkan TradingView jika sebelumnya di-suspend saat layar mati lama
+            // Pulihkan TradingView jika sebelumnya di-suspend saat layar mati > 30 detik
             if (dom.tvIframe && savedTvSrc && dom.tvIframe.src.includes('about:blank')) {
+                dom.tvIframe.style.opacity = '0.35';
+                const onRestoreLoad = () => {
+                    dom.tvIframe.style.opacity = '1';
+                    dom.tvIframe.removeEventListener('load', onRestoreLoad);
+                };
+                dom.tvIframe.addEventListener('load', onRestoreLoad, { once: true });
                 dom.tvIframe.src = savedTvSrc;
                 savedTvSrc = null;
                 debugLog('TradingView restored dengan memori bersih');
@@ -2272,6 +2358,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ================= CHART WIDTH MANAGEMENT ================= */
+function updateActiveChartWidthUI(activeWidth) {
+    if (!dom.chartWidthMenu) return;
+    const widthButtons = dom.chartWidthMenu.querySelectorAll('button[data-width]');
+    widthButtons.forEach(btn => {
+        const w = btn.getAttribute('data-width');
+        const isCurrent = (w === activeWidth);
+        btn.classList.toggle('bg-blue-50', isCurrent);
+        btn.classList.toggle('dark:bg-blue-900/30', isCurrent);
+        btn.classList.toggle('text-blue-600', isCurrent);
+        btn.classList.toggle('dark:text-blue-400', isCurrent);
+        btn.classList.toggle('font-medium', isCurrent);
+
+        let checkIcon = btn.querySelector('.chart-width-check');
+        if (isCurrent && !checkIcon) {
+            btn.insertAdjacentHTML('beforeend', '<svg class="chart-width-check ui-icon w-3.5 h-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>');
+        } else if (!isCurrent && checkIcon) {
+            checkIcon.remove();
+        }
+    });
+}
+
 function applyChartWidth(width) {
     state.chartWidth = width;
     localStorage.setItem('chartWidth', width);
@@ -2300,6 +2407,8 @@ function applyChartWidth(width) {
             dom.rightPanel.classList.add('col-span-1');
             break;
     }
+
+    updateActiveChartWidthUI(width);
 }
 
 /* ================= HYPER-FAST FETCH (TREASURY WEBV2 API & FALLBACK) ================= */
@@ -2439,7 +2548,6 @@ async function fetchHarga(force = false) {
         if (state.fetchSeq === fetchSeq) {
             state.isFetching = false;
         }
-        state.isManualRefresh = false;
         state.isAutoFetching = false;
         state.isRetrying = false;
         clearRetryTimeout();
@@ -2487,8 +2595,8 @@ function updateUI(data) {
         state.lastRenderedSell = sell;
     }
 
-    const displayPrevBuy = getPreviousDistinctPrice('buy', buy);
-    const displayPrevSell = getPreviousDistinctPrice('sell', sell);
+    const displayPrevBuy = getPreviousPriceForIndicator('buy', buy);
+    const displayPrevSell = getPreviousPriceForIndicator('sell', sell);
     renderPriceChangeIndicator(dom.hargaBeliChange, buy, displayPrevBuy);
     renderPriceChangeIndicator(dom.hargaJualChange, sell, displayPrevSell);
 

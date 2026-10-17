@@ -26,8 +26,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20261016181530">
-    <link rel="stylesheet" href="style.css?v=20261016181530">
+    <link rel="stylesheet" href="tailwind.css?v=20261017184705">
+    <link rel="stylesheet" href="style.css?v=20261017184705">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -61,13 +61,17 @@
                     <div class="dashboard-header-row grid grid-cols-3 h-24 gap-2">
                         <!-- WAKTU RESMI SERVER TREASURY (WIB) NATIVE BESAR FULL -->
                         <div class="header-time-col h-full">
-                            <div class="glass-card rounded-lg p-2 card-hover card-elevated h-full flex flex-col justify-between select-none" style="container-type: inline-size;" title="Waktu Resmi Server Treasury (WIB)">
+                            <div class="glass-card rounded-lg p-2 card-hover card-elevated h-full flex flex-col justify-between select-none"
+                                style="container-type: inline-size;" title="Waktu Resmi Server Treasury (WIB)">
                                 <div class="flex-1 flex flex-col justify-between py-0.5">
                                     <!-- Header Date posisi & ukuran SAMA PERSIS dan SEJAJAR dengan Update Terakhir -->
                                     <div class="update-info-heading">
                                         <span class="update-info-icon">
-                                            <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none"
+                                                stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                                </path>
                                             </svg>
                                         </span>
                                         <p id="serverClockDate" class="update-info-label text-xs font-medium truncate">
@@ -77,7 +81,9 @@
 
                                     <!-- Angka Jam Besar, Tebal, dan Responsif Bebas Overflow -->
                                     <div class="flex-1 flex items-center justify-center w-full">
-                                        <span id="serverClockHms" class="font-black font-numeric text-gray-900 dark:text-gray-100 leading-none text-center select-none" style="font-size: clamp(2.35rem, 17cqw, 3.12rem); line-height: 0.95; font-weight: 900; letter-spacing: 0.015em; -webkit-text-stroke: 0.45px currentColor;">--:--:--</span>
+                                        <span id="serverClockHms"
+                                            class="font-black font-numeric text-gray-900 dark:text-gray-100 leading-none text-center select-none"
+                                            style="font-size: clamp(2.35rem, 17cqw, 3.12rem); line-height: 0.95; font-weight: 900; letter-spacing: 0.015em; -webkit-text-stroke: 0.45px currentColor;">--:--:--</span>
                                     </div>
                                 </div>
                                 <span id="serverClockOffset" class="hidden">Akurat</span>
@@ -107,8 +113,7 @@
                                                         Update Terakhir
                                                     </p>
                                                 </div>
-                                                <span id="treasuryWsBadge"
-                                                    class="treasury-ws-badge ws-live"
+                                                <span id="treasuryWsBadge" class="treasury-ws-badge ws-live"
                                                     title="Status: Pusher WebSocket Live (0-delay push)">
                                                     <span id="treasuryWsBadgeDot" class="treasury-ws-dot"></span>
                                                     <span id="treasuryWsBadgeText">Live WS</span>
@@ -143,7 +148,9 @@
                                                         class="usd-idr-label text-xs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
                                                         USD/IDR
                                                     </p>
-                                                    <span id="backendStatusDot" class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block ml-1 shadow-sm" title="Backend Vercel: Menghubungkan..."></span>
+                                                    <span id="backendStatusDot"
+                                                        class="w-1.5 h-1.5 rounded-full bg-green-500 inline-block ml-1 shadow-sm"
+                                                        title="Backend Vercel: Menghubungkan..."></span>
                                                 </div>
                                                 <p id="usdIdrChange"
                                                     class="usd-idr-change-pill price-change-neutral font-numeric"
@@ -292,7 +299,7 @@
                                         </path>
                                     </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                        Gram Beli 60jt
+                                        Gram Beli
                                     </p>
                                 </div>
                                 <p id="gramBeli"
@@ -310,13 +317,31 @@
                                         </path>
                                     </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                        Gram Jual 58.005jt
+                                        Gram Jual
                                     </p>
                                 </div>
                                 <p id="gramJual"
                                     class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
                                     -
                                 </p>
+                            </div>
+
+                            <!-- USD/IDR Treasury (dari WebSocket) -->
+                            <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
+                                <div class="flex items-center mb-1.5">
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                                        </path>
+                                    </svg>
+                                    <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
+                                        USD/IDR Treasury
+                                    </p>
+                                </div>
+                                <p id="usdIdrTreasuryWs"
+                                    class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
+                                    -</p>
                             </div>
 
                             <!-- Cuan -->
@@ -328,25 +353,10 @@
                                             d="M4 16l5-5 4 4 7-8m0 0h-5m5 0v5"></path>
                                     </svg>
                                     <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                        Profit / Rugi
+                                        Profit
                                     </p>
                                 </div>
                                 <p id="cuan" class="text-sm font-bold text-ellipsis font-numeric">-</p>
-                            </div>
-
-                            <!-- USD/IDR Treasury (dari WebSocket) -->
-                            <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
-                                <div class="flex items-center mb-1.5">
-                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="none"
-                                        stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
-                                        USD/IDR Treasury
-                                    </p>
-                                </div>
-                                <p id="usdIdrTreasuryWs" class="text-sm font-bold text-blue-600 dark:text-blue-400 text-ellipsis font-numeric">-</p>
                             </div>
 
                         </div>
@@ -518,8 +528,19 @@
 
                 <!-- RIGHT PANEL - Trading View iframe -->
                 <div id="rightPanel" class="dashboard-side-panel relative">
-                    <!-- Chart Width Controls -->
+                    <!-- Quick Controls -->
                     <div class="absolute top-1 right-1 z-10 flex space-x-1">
+                        <button id="darkModeBtn"
+                            class="p-1.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors duration-200"
+                            title="Mode Gelap/Terang">
+                            <svg class="ui-icon w-4 h-4 text-gray-700 dark:text-gray-300" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path id="themeIconPath" stroke-linecap="round" stroke-linejoin="round"
+                                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
+                                </path>
+                            </svg>
+                        </button>
+
                         <button id="settingsBtn"
                             class="p-1.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors duration-200"
                             title="Pengaturan">
@@ -530,16 +551,6 @@
                                 </path>
                             </svg>
                         </button>
-
-                        <button id="chartWidthBtn"
-                            class="p-1.5 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:bg-white dark:hover:bg-gray-800 transition-colors duration-200"
-                            title="Ubah Lebar Chart">
-                            <svg class="ui-icon w-4 h-4 text-gray-700 dark:text-gray-300" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h6v14H4zM14 5h6v14h-6z">
-                                </path>
-                            </svg>
-                        </button>
                     </div>
 
                     <!-- Settings Menu -->
@@ -547,32 +558,46 @@
                         class="absolute top-10 right-1 z-20 hidden bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 min-w-[150px]">
                         <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Pengaturan</p>
                         <div class="space-y-1">
-                            <button id="refreshApiBtn" class="settings-menu-item group">
-                                <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M20 11a8 8 0 00-14.8-4L4 9m0 0V4m0 5h5M4 13a8 8 0 0014.8 4L20 15m0 0v5m0-5h-5">
-                                    </path>
-                                </svg>
-                                <span>Data</span>
-                            </button>
-                            <button id="refreshIframeBtn" class="settings-menu-item group">
-                                <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M4 5h16v12H4zM8 21h8M12 17v4"></path>
-                                </svg>
-                                <span>Widget</span>
-                            </button>
-                            <button id="darkModeBtn" class="settings-menu-item group">
-                                <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
-                                    </path>
-                                </svg>
-                                <span id="themeText">Theme</span>
-                            </button>
+                            <!-- Lebar Chart dengan Flyout Submenu ke Kiri -->
+                            <div id="chartWidthSubmenuWrapper" class="relative group/chartwidth">
+                                <button id="chartWidthBtn" type="button"
+                                    class="settings-menu-item justify-between group">
+                                    <span class="flex items-center space-x-2">
+                                        <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M4 5h6v14H4zM14 5h6v14h-6z">
+                                            </path>
+                                        </svg>
+                                        <span>Lebar Chart</span>
+                                    </span>
+                                    <svg class="ui-icon w-3 h-3 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-transform"
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                </button>
+
+                                <!-- Submenu Bertingkat (Flyout ke Kiri) -->
+                                <div id="chartWidthMenu"
+                                    class="absolute right-full top-0 mr-1.5 z-30 hidden bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-1.5 min-w-[130px] space-y-1">
+                                    <p
+                                        class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-2 py-0.5">
+                                        Pilih Ukuran</p>
+                                    <button data-width="1/4"
+                                        class="chart-width-option w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300 flex items-center justify-between transition-colors">
+                                        <span>1/4 Layar</span>
+                                    </button>
+                                    <button data-width="1/3"
+                                        class="chart-width-option w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300 flex items-center justify-between transition-colors">
+                                        <span>1/3 Layar</span>
+                                    </button>
+                                    <button data-width="1/2"
+                                        class="chart-width-option w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300 flex items-center justify-between transition-colors">
+                                        <span>1/2 Layar</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <button id="fullscreenBtn" class="settings-menu-item group">
                                 <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
@@ -601,7 +626,8 @@
                                 <span>USD/IDR</span>
                             </a>
                             <a href="https://susdidr.vercel.app/api/index?version" target="_blank"
-                                rel="noopener noreferrer" class="settings-menu-item group" title="Cek Status & Versi Deployment Vercel">
+                                rel="noopener noreferrer" class="settings-menu-item group"
+                                title="Cek Status & Versi Deployment Vercel">
                                 <svg class="ui-icon w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -610,26 +636,6 @@
                                 </svg>
                                 <span>Cek Vercel</span>
                             </a>
-                        </div>
-                    </div>
-
-                    <!-- Chart Width Menu -->
-                    <div id="chartWidthMenu"
-                        class="absolute top-10 right-10 z-20 hidden bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 min-w-[120px]">
-                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Lebar Chart</p>
-                        <div class="space-y-1">
-                            <button data-width="1/4"
-                                class="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300">
-                                1/4 Layar
-                            </button>
-                            <button data-width="1/3"
-                                class="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300">
-                                1/3 Layar
-                            </button>
-                            <button data-width="1/2"
-                                class="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-700 dark:text-gray-300">
-                                1/2 Layar
-                            </button>
                         </div>
                     </div>
 
@@ -648,9 +654,22 @@
                             </div>
                         </div>
                         <div
-                            class="chart-container flex-1 min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-                            <iframe id="tvIframe" class="w-full h-full" loading="lazy"
-                                data-src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme={theme}&style=1&timezone=Asia%2FJakarta&hide_side_toolbar=true&withdateranges=false&allow_symbol_change=false&save_image=false&enable_publishing=false&details=false&hotlist=false&calendar=false&news=false&locale=id"
+                            class="chart-container flex-1 min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 relative overflow-hidden">
+                            <div id="chartSkeleton"
+                                class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 z-0">
+                                <svg class="w-7 h-7 text-amber-500/60 animate-pulse mb-1.5" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                        d="M3 12h4l2-4 4 8 2-4h6"></path>
+                                </svg>
+                                <span class="text-[11px] font-medium text-gray-400 dark:text-gray-500 tracking-wide">
+                                    Memuat Chart XAU/USD...
+                                </span>
+                            </div>
+                            <iframe id="tvIframe"
+                                class="w-full h-full opacity-0 transition-opacity duration-300 relative z-10"
+                                loading="lazy"
+                                data-src="https://s.tradingview.com/widgetembed/?symbol=OANDA:XAUUSD&interval=1&theme={theme}&style=1&timezone=Asia%2FJakarta&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&hideideas=1&withdateranges=0&details=0&hotlist=0&calendar=0&news=0&locale=id"
                                 title="XAU/USD Trading Chart" scrolling="no" frameborder="0" allowfullscreen>
                             </iframe>
                         </div>
@@ -663,8 +682,10 @@
         <div class="status-footer">
             <div class="status-footer-brand">
                 <span class="status-footer-title">Pantau Treasury</span>
-                <span id="appVersionBadge" class="status-footer-version" title="Versi Frontend (GitHub Pages)">v26.10.16.2</span>
-                <span id="backendVersionBadge" class="status-footer-version" title="Versi Backend Vercel" style="display: none;">API: -</span>
+                <span id="appVersionBadge" class="status-footer-version"
+                    title="Versi Frontend (GitHub Pages)">v26.10.17.2</span>
+                <span id="backendVersionBadge" class="status-footer-version" title="Versi Backend Vercel"
+                    style="display: none;">API: -</span>
             </div>
         </div>
     </div>
@@ -742,7 +763,7 @@
     <!-- Pusher JS Library -->
     <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js"></script>
     <!-- Script -->
-    <script src="script.js?v=20261016181530" defer></script>
+    <script src="script.js?v=20261017184705" defer></script>
 </body>
 
 </html>
