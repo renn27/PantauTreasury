@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.10.17.5';
+const CACHE_NAME = 'pantau-treasury-v26.10.29.1';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -62,7 +62,8 @@ self.addEventListener('fetch', (event) => {
             networkResponse.type === 'basic' || 
             (networkResponse.type === 'cors' && (
               requestUrl.hostname.includes('fonts.gstatic.com') ||
-              requestUrl.hostname.includes('fonts.googleapis.com')
+              requestUrl.hostname.includes('fonts.googleapis.com') ||
+              requestUrl.hostname.includes('cdn.jsdelivr.net')
             ))
           );
 
