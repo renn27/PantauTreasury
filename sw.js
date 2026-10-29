@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.10.29.1';
+const CACHE_NAME = 'pantau-treasury-v26.10.29.2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -45,11 +45,10 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(event.request.url);
 
-  // Network-Only untuk panggilan API agar harga selalu fresh dan tidak stale di cache SW
+  // Bypass Service Worker untuk panggilan API eksternal agar ditangani langsung oleh network stack browser
   if (requestUrl.hostname.includes('vercel.app') ||
       requestUrl.hostname.includes('treasury.id') ||
       requestUrl.pathname.includes('/api/')) {
-    event.respondWith(fetch(event.request));
     return;
   }
 

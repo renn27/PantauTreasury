@@ -99,7 +99,7 @@ let state = {
     simulationStorageLastSavedAt: 0,
     usdIdrPollTimeoutId: null,
     usdIdrFetchController: null,
-    usdIdrEtag: null,
+    usdIdrFailCount: 0,
     usdIdrWs: null,
     usdIdrPingInterval: null,
     usdIdrLastPrice: null,
@@ -1516,37 +1516,26 @@ async function connectUsdIdrFeed() {
         }
     }
 
-    // 2. Fallback / Mode Utama: Gunakan REST API Vercel (Khusus USD/IDR & Sinkronisasi Waktu Server)
+    // 2. Fallback / Mode Utama: Gunakan REST API Vercel (Khusus USD/IDR)
     const controller = new AbortController();
     state.usdIdrFetchController = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let isTimeoutAbort = false;
+    const timeoutId = setTimeout(() => {
+        isTimeoutAbort = true;
+        controller.abort();
+    }, 7000);
 
     try {
         debugLog('Mengambil data USD/IDR dari REST API...');
-        const reqStart = Date.now();
-        const headers = { 'Accept': 'application/json' };
-        if (state.usdIdrEtag) {
-            headers['If-None-Match'] = state.usdIdrEtag;
-        }
-
         const res = await fetch(MY_USD_IDR_API_URL, {
             signal: controller.signal,
-            headers
+            headers: { 'Accept': 'application/json' }
         });
 
-        const newEtag = res.headers.get('ETag');
-        if (newEtag) {
-            state.usdIdrEtag = newEtag;
-        }
-
-        if (res.status === 304) {
-            debugLog('USD/IDR data 304 Not Modified (cached via ETag)');
-            setBackendConnectionStatus(true, 'Backend Vercel: Online (304 Cached)');
-            scheduleUsdIdrPoll();
-            return;
-        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+
+        state.usdIdrFailCount = 0;
 
         if (data && data.version) {
             updateBackendVersionDisplay(data.version, data.commit_sha);
@@ -1571,11 +1560,14 @@ async function connectUsdIdrFeed() {
         setBackendConnectionStatus(true, 'Backend Vercel: Online');
         scheduleUsdIdrPoll();
     } catch (e) {
-        if (e.name === 'AbortError') return;
+        if (e.name === 'AbortError' && !isTimeoutAbort) return;
+        state.usdIdrFailCount = (state.usdIdrFailCount || 0) + 1;
         debugLog('REST API fetch error:', e);
-        setBackendConnectionStatus(false, 'Backend Vercel: Gangguan / Offline');
-        setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
-        state.usdIdrPollTimeoutId = setTimeout(connectUsdIdrFeed, USD_IDR_POLL_MS);
+        if (!state.usdIdrLastPrice || state.usdIdrFailCount >= 2) {
+            setBackendConnectionStatus(false, 'Backend Vercel: Gangguan / Offline');
+            setUsdIdrUnavailableStatus(state.usdIdrLastPrice ? 'Gagal, coba lagi...' : 'Tidak tersedia');
+        }
+        scheduleUsdIdrPoll();
     } finally {
         clearTimeout(timeoutId);
         if (state.usdIdrFetchController === controller) {
