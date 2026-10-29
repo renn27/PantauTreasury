@@ -11,7 +11,7 @@ const PRICE_HISTORY_LIMIT = 30;
 const SIM_STATUS_COLOR_CLASSES = ['text-green-500', 'text-red-500', 'text-green-600', 'dark:text-green-400', 'text-red-600', 'dark:text-red-400'];
 const MY_USD_IDR_WS_URL = '';
 const MY_USD_IDR_API_URL = 'https://susdidr.vercel.app/api/index';
-const USD_IDR_POLL_MS = 6 * 1000;
+const USD_IDR_POLL_MS = 3 * 1000;
 const DEBUG = false;
 
 /* ================= TREASURY REALTIME CONFIG ================= */
@@ -1207,10 +1207,11 @@ function dedupeUsdIdrHistory(items) {
         }
         const prev = deduped[deduped.length - 1];
         if (Math.abs(prev.value - item.value) < 1e-6) {
-            // Harga tidak berubah: pertahankan waktu pencatatan awal perubahan, perbarui metadata market_time terbaru
+            // Harga tidak berubah: pertahankan waktu pencatatan awal perubahan (time, timestamp, updated_at),
+            // cukup perbarui metadata market_time terbaru
             if (item.market_time) prev.market_time = item.market_time;
-            if (item.timestamp) prev.timestamp = item.timestamp;
-            if (item.updated_at) prev.updated_at = item.updated_at;
+            if (!prev.timestamp && item.timestamp) prev.timestamp = item.timestamp;
+            if (!prev.updated_at && item.updated_at) prev.updated_at = item.updated_at;
         } else if (prev.time === item.time) {
             // Waktu sama persis namun nilai terupdate: gunakan entri terbaru
             deduped[deduped.length - 1] = { ...item };
@@ -1240,8 +1241,8 @@ function renderUsdIdrHistory(history, currentRateInfo = null) {
     if (!latest) return;
 
     const comparisonPrice = findUsdIdrComparisonPrice(mergedHistory, latest.value);
-    const displayTime = (currentRateInfo && currentRateInfo.time) || latest.market_time || latest.time;
-    const rawTs = (currentRateInfo && (currentRateInfo.timestamp || currentRateInfo.updated_at)) || latest.timestamp || latest.updated_at;
+    const displayTime = latest.time || (currentRateInfo && currentRateInfo.time) || latest.market_time;
+    const rawTs = latest.updated_at || latest.timestamp || (currentRateInfo && (currentRateInfo.updated_at || currentRateInfo.timestamp));
     renderUsdIdrRate(latest.price, displayTime, comparisonPrice, rawTs);
 }
 
