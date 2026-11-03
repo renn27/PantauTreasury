@@ -3,8 +3,8 @@ const FETCH_TIMEOUT_MS = 7000;
 const CACHE_LOCAL_TTL_MS = 30000;
 const SIMULATION_TTL_MS = 86400000; // 24 jam
 const SIMULATION_STORAGE_THROTTLE_MS = 5000;
-const SIMULATION_BUY_BASE = 60000000;
-const SIMULATION_SELL_BASE = 58006500;
+const SIMULATION_BUY_BASE = 30000000;
+const SIMULATION_SELL_BASE = 28980000;
 const SIMULATION_GRAM_SUCCESS_THRESHOLD = 0.04;
 const SIMULATION_PROFIT_SUCCESS_THRESHOLD = 100000;
 const PRICE_HISTORY_LIMIT = 30;
@@ -205,7 +205,7 @@ async function syncServerClock(force = false) {
 
     const probeOnce = async () => {
         const t0 = Date.now();
-        const res = await fetch(`https://webv2-api.treasury.id/?_t=${ t0 }`, {
+        const res = await fetch(`https://webv2-api.treasury.id/?_t=${t0}`, {
             method: 'GET',
             cache: 'no-store',
             headers: { 'Accept': 'application/json' }
