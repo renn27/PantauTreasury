@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.11.04.10';
+const CACHE_NAME = 'pantau-treasury-v26.11.04.11';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -97,7 +97,7 @@ self.addEventListener('fetch', (event) => {
 // ==========================================
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
-    let title = '🔥 PROMO TREASURY AKTIF (ON)!';
+    let title = '🔥 TS ON 🔥!';
     let body = 'Promo Treasury sedang aktif! Segera buka aplikasi untuk eksekusi.';
     let url = './';
 

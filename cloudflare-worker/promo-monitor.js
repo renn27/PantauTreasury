@@ -252,7 +252,7 @@ async function checkPromoAndBroadcastPush(env, forceCheck = false) {
             triggered = true;
 
             const payload = {
-                title: '🔥 PROMO TREASURY AKTIF (ON)!',
+                title: '🔥 TS ON 🔥!',
                 body: `Batas Beli: ${formattedPrice} | Segera buka aplikasi PantauTreasury untuk eksekusi!`,
                 url: './'
             };

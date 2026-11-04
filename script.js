@@ -1508,7 +1508,7 @@ function triggerPromoNotification(price) {
     if (typeof window.Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
             const priceText = price ? ` dengan batas harga ${formatRupiah(price)}` : '';
-            new Notification('🔥 PROMO TREASURY AKTIF!', {
+            new Notification('🔥 TS ON 🔥!', {
                 body: `Promo Treasury sedang ON${priceText}! Segera buka aplikasi untuk eksekusi.`,
                 icon: './assets/icons/icon-192.png',
                 tag: 'treasury-promo-alert'
