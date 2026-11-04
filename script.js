@@ -1450,14 +1450,14 @@ function loadCachedPromoData() {
 function updatePromoUI(isOn, promoPrice) {
     if (dom.promoStatusText) {
         if (isOn === true) {
-            dom.promoStatusText.textContent = 'PROMO ON';
-            dom.promoStatusText.className = 'text-sm font-bold text-emerald-600 dark:text-emerald-400 font-numeric tracking-tight truncate';
+            dom.promoStatusText.textContent = 'ON';
+            dom.promoStatusText.className = 'text-sm font-bold text-emerald-600 dark:text-emerald-400 font-numeric tracking-tight flex-shrink-0';
         } else if (isOn === false) {
-            dom.promoStatusText.textContent = 'PROMO OFF';
-            dom.promoStatusText.className = 'text-sm font-bold text-red-500 dark:text-red-400 font-numeric tracking-tight truncate';
+            dom.promoStatusText.textContent = 'OFF';
+            dom.promoStatusText.className = 'text-sm font-bold text-red-500 dark:text-red-400 font-numeric tracking-tight flex-shrink-0';
         } else {
             dom.promoStatusText.textContent = '-';
-            dom.promoStatusText.className = 'text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight truncate';
+            dom.promoStatusText.className = 'text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight flex-shrink-0';
         }
     }
 

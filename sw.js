@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.11.04.5';
+const CACHE_NAME = 'pantau-treasury-v26.11.04.6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
