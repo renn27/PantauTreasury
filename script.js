@@ -1720,19 +1720,33 @@ function connectPromoEventSource() {
     }
 }
 
-async function initPromoFeed() {
-    loadCachedPromoData();
-    fetchPromoHistoryREST();
-
+async function fetchPromoNow() {
     try {
-        const resp = await fetch(PROMO_FIREBASE_SETTINGS_URL);
+        const resp = await fetch(PROMO_FIREBASE_SETTINGS_URL, { cache: 'no-store' });
         if (resp.ok) {
             const data = await resp.json();
             handlePromoSettingsData(data, false);
         }
-    } catch (e) { }
+    } catch (e) {
+        console.warn('[Promo] Fetch error:', e);
+    }
+}
 
+async function initPromoFeed() {
+    loadCachedPromoData();
+    fetchPromoHistoryREST();
+
+    // 1. Fetch data promo langsung
+    await fetchPromoNow();
+
+    // 2. Hubungkan SSE (Realtime Stream)
     connectPromoEventSource();
+
+    // 3. Fallback polling berkala setiap 15 detik
+    if (state.promoPollIntervalId) {
+        clearInterval(state.promoPollIntervalId);
+    }
+    state.promoPollIntervalId = setInterval(fetchPromoNow, 15000);
 }
 
 /* ================= PWA WEB PUSH PROMO NOTIFICATIONS ================= */

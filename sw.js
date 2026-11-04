@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.11.04.2';
+const CACHE_NAME = 'pantau-treasury-v26.11.04.5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -45,9 +45,11 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(event.request.url);
 
-  // Bypass Service Worker untuk panggilan API eksternal agar ditangani langsung oleh network stack browser
+  // Bypass Service Worker untuk panggilan API eksternal, Firebase, SSE stream, & Worker
   if (requestUrl.hostname.includes('vercel.app') ||
       requestUrl.hostname.includes('treasury.id') ||
+      requestUrl.hostname.includes('firebaseio.com') ||
+      requestUrl.hostname.includes('workers.dev') ||
       requestUrl.pathname.includes('/api/')) {
     return;
   }
