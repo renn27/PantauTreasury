@@ -244,8 +244,9 @@ async function checkPromoAndBroadcastPush(env, forceCheck = false) {
         let pushResult = null;
 
         // Pemicu Notifikasi:
-        // Kirim jika forceCheck === true ATAU jika status sekarang ON dan status sebelumnya BUKAN true
-        const shouldTrigger = forceCheck || (currentStatus === true && prevBool !== true);
+        // Notifikasi HANYA dikirim persis saat status promo berubah dari OFF ke ON!
+        const isOffToOn = (prevBool === false && currentStatus === true);
+        const shouldTrigger = forceCheck || isOffToOn;
 
         if (shouldTrigger) {
             triggered = true;

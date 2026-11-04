@@ -1632,7 +1632,7 @@ function handlePromoSettingsData(data, allowAlert = true) {
     }
 
     const previousStatus = state.promoStatus;
-    const statusChanged = previousStatus !== null && previousStatus !== newStatus;
+    const isOffToOn = previousStatus === false && newStatus === true;
 
     state.promoStatus = newStatus;
     state.promoPrice = newPrice;
@@ -1647,10 +1647,11 @@ function handlePromoSettingsData(data, allowAlert = true) {
 
     updatePromoUI(newStatus, newPrice);
 
-    if (statusChanged) {
-        if (newStatus === true && allowAlert) {
-            triggerPromoNotification(newPrice);
-        }
+    // Alert suara/notifikasi hanya dipicu saat transisi tepat dari OFF ke ON
+    if (isOffToOn && allowAlert) {
+        triggerPromoNotification(newPrice);
+    }
+    if (previousStatus !== null && previousStatus !== newStatus) {
         fetchPromoHistoryREST();
     }
 }
