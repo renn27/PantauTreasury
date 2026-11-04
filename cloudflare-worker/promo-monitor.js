@@ -430,25 +430,21 @@ async function encryptWebPushPayload(receiverP256dhB64, receiverAuthB64, plainte
 
     // ECDH Shared Secret
     const receiverPubKey = await crypto.subtle.importKey('raw', receiverRawPub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-    const sharedSecret = await crypto.subtle.deriveBits({ name: 'ECDH', public: receiverPubKey }, localPair.privateKey, 256);
+    const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: receiverPubKey }, localPair.privateKey, 256));
 
-    // HKDF derive IKM
-    const infoPrefix = new TextEncoder().encode('WebPush: info\0');
-    const ikmInfo = new Uint8Array(infoPrefix.length + receiverRawPub.byteLength + localRawPub.byteLength);
-    ikmInfo.set(infoPrefix, 0);
-    ikmInfo.set(receiverRawPub, infoPrefix.length);
-    ikmInfo.set(localRawPub, infoPrefix.length + receiverRawPub.byteLength);
+    // HKDF derive IKM (RFC 8291 Section 3.2: IKM = HKDF-Expand(HKDF-Extract(salt=auth_secret, ikm=shared_secret), key_info, 32))
+    const keyInfo = new Uint8Array(14 + receiverRawPub.length + localRawPub.length);
+    keyInfo.set(new TextEncoder().encode('WebPush: info\0'), 0);
+    keyInfo.set(receiverRawPub, 14);
+    keyInfo.set(localRawPub, 14 + receiverRawPub.length);
 
-    const authKey = await crypto.subtle.importKey('raw', receiverAuth, { name: 'HKDF' }, false, ['deriveBits']);
-    const ikmBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(sharedSecret), info: ikmInfo }, authKey, 256);
+    const ecdhKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'HKDF' }, false, ['deriveBits']);
+    const ikmBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: receiverAuth, info: keyInfo }, ecdhKey, 256);
 
     // PRK to CEK and Nonce
     const prkKey = await crypto.subtle.importKey('raw', ikmBits, { name: 'HKDF' }, false, ['deriveBits']);
-    const cekInfo = new TextEncoder().encode('Content-Encoding: aes128gcm\0');
-    const cekBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: cekInfo }, prkKey, 128);
-
-    const nonceInfo = new TextEncoder().encode('Content-Encoding: nonce\0');
-    const nonceBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: nonceInfo }, prkKey, 96);
+    const cekBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: new TextEncoder().encode('Content-Encoding: aes128gcm\0') }, prkKey, 128);
+    const nonceBits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: salt, info: new TextEncoder().encode('Content-Encoding: nonce\0') }, prkKey, 96);
 
     // AES-GCM Encrypt
     const cek = await crypto.subtle.importKey('raw', cekBits, { name: 'AES-GCM' }, false, ['encrypt']);
