@@ -233,6 +233,16 @@ body {
     flex-shrink: 0;
 }
 
+.usd-badge-icon {
+    width: 0.72rem;
+    height: 0.72rem;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
 /* State: Live WS (Connected) */
 .treasury-ws-badge.ws-live {
     background: #ecfdf5;
