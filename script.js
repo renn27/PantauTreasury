@@ -1612,14 +1612,24 @@ async function fetchPromoHistoryREST() {
 }
 
 function handlePromoSettingsData(data, allowAlert = true) {
-    if (!data) return;
+    if (!data || typeof data !== 'object') return;
 
-    const newStatus = typeof data.promo_status === 'boolean'
-        ? data.promo_status
-        : (data.promo_status === 'true' || data.promo_status === 1);
+    // Abaikan event jika data tidak mengandung informasi promo sama sekali (misal patch kurs USD/IDR)
+    if (data.promo_status === undefined && data.promo_price === undefined) {
+        return;
+    }
 
-    const rawPrice = data.promo_price !== undefined ? data.promo_price : state.promoPrice;
-    const newPrice = Number(rawPrice) || state.promoPrice || null;
+    let newStatus = state.promoStatus;
+    if (data.promo_status !== undefined) {
+        newStatus = typeof data.promo_status === 'boolean'
+            ? data.promo_status
+            : (data.promo_status === 'true' || data.promo_status === 1);
+    }
+
+    let newPrice = state.promoPrice;
+    if (data.promo_price !== undefined) {
+        newPrice = Number(data.promo_price) || state.promoPrice || null;
+    }
 
     const previousStatus = state.promoStatus;
     const statusChanged = previousStatus !== null && previousStatus !== newStatus;
@@ -1674,18 +1684,12 @@ function connectPromoEventSource() {
             try {
                 const parsed = JSON.parse(event.data);
                 if (!parsed) return;
-                if (parsed.path === '/' && parsed.data) {
+                if (parsed.path === '/' && parsed.data && typeof parsed.data === 'object') {
                     handlePromoSettingsData(parsed.data, true);
                 } else if (parsed.path === '/promo_status') {
-                    handlePromoSettingsData({
-                        promo_status: parsed.data,
-                        promo_price: state.promoPrice
-                    }, true);
+                    handlePromoSettingsData({ promo_status: parsed.data }, true);
                 } else if (parsed.path === '/promo_price') {
-                    handlePromoSettingsData({
-                        promo_status: state.promoStatus,
-                        promo_price: parsed.data
-                    }, false);
+                    handlePromoSettingsData({ promo_price: parsed.data }, false);
                 }
             } catch (e) { }
         });
@@ -1693,8 +1697,10 @@ function connectPromoEventSource() {
         es.addEventListener('patch', (event) => {
             try {
                 const parsed = JSON.parse(event.data);
-                if (parsed && parsed.data) {
-                    handlePromoSettingsData(parsed.data, true);
+                if (parsed && parsed.data && typeof parsed.data === 'object') {
+                    if (parsed.data.promo_status !== undefined || parsed.data.promo_price !== undefined) {
+                        handlePromoSettingsData(parsed.data, true);
+                    }
                 }
             } catch (e) { }
         });

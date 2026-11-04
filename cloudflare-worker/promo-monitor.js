@@ -14,8 +14,10 @@ const DEFAULT_VAPID_PUBLIC_KEY = 'BAAxHYI3EH7oFyKkwfd9P-TIpAfhEl5GD9WzP74nckzJa_
 const DEFAULT_VAPID_PRIVATE_KEY = 'PhPpF6zUB5ofT5BFrPvMoGLJCQsDVOtvjLBDfFjpqXw';
 const DEFAULT_VAPID_SUBJECT = 'mailto:admin@pantautreasury.com';
 
-// Cache memory lokal (jika KV belum di-bind)
+// Cache memory lokal (jika KV belum di-bind di dashboard)
 const memorySubscriptions = new Map();
+let memoryLastStatus = null;
+let memoryLastPrice = null;
 
 export default {
     /**
@@ -66,9 +68,9 @@ export default {
                 if (env.PROMO_KV) {
                     // Simpan di KV dengan masa berlaku 60 hari
                     await env.PROMO_KV.put(`sub:${subId}`, subStr, { expirationTtl: 60 * 60 * 24 * 60 });
-                } else {
-                    memorySubscriptions.set(subId, sub);
                 }
+                // Simpan juga di memory Map sebagai fallback
+                memorySubscriptions.set(subId, sub);
 
                 return new Response(JSON.stringify({ success: true, message: 'PWA Push Subscription saved successfully' }), {
                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -89,9 +91,8 @@ export default {
                     const subId = await hashString(body.endpoint);
                     if (env.PROMO_KV) {
                         await env.PROMO_KV.delete(`sub:${subId}`);
-                    } else {
-                        memorySubscriptions.delete(subId);
                     }
+                    memorySubscriptions.delete(subId);
                 }
                 return new Response(JSON.stringify({ success: true, message: 'Unsubscribed' }), {
                     headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -124,24 +125,36 @@ export default {
             });
         }
 
-        // 5. Endpoint /check-now: Cek promo secara manual
+        // 5. Endpoint /reset-status: Reset status agar bisa menguji transisi ulang
+        if (url.pathname === '/reset-status') {
+            if (env.PROMO_KV) {
+                await env.PROMO_KV.delete('last_promo_status');
+            }
+            memoryLastStatus = null;
+            return new Response(JSON.stringify({ success: true, message: 'Status reset to null' }), {
+                headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            });
+        }
+
+        // 6. Endpoint /check-now: Cek promo secara manual (opsi ?force=true untuk tembak notifikasi langsung)
         if (url.pathname === '/check-now') {
-            const res = await checkPromoAndBroadcastPush(env, true);
+            const force = url.searchParams.get('force') === 'true';
+            const res = await checkPromoAndBroadcastPush(env, force);
             return new Response(JSON.stringify(res, null, 2), {
                 headers: { 'Content-Type': 'application/json', ...corsHeaders }
             });
         }
 
-        // 6. Endpoint / (Status): Menampilkan status live
+        // 7. Endpoint / (Status): Menampilkan status live
         try {
             const promo = await fetchFirebasePromo();
             let subscriberCount = memorySubscriptions.size;
-            let lastStatus = null;
+            let lastStatus = memoryLastStatus;
 
             if (env.PROMO_KV) {
                 lastStatus = await env.PROMO_KV.get('last_promo_status');
                 const list = await env.PROMO_KV.list({ prefix: 'sub:' });
-                subscriberCount = list.keys.length;
+                subscriberCount = Math.max(subscriberCount, list.keys.length);
             }
 
             return new Response(JSON.stringify({
@@ -149,9 +162,10 @@ export default {
                 status: 'ACTIVE_24_7',
                 current_time_wib: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB',
                 registered_pwa_devices: subscriberCount,
-                live_promo_status: promo?.promo_status || false,
+                live_promo_status: Boolean(promo?.promo_status),
                 live_promo_price: promo?.promo_price ? Number(promo.promo_price) : 0,
                 stored_prev_status: lastStatus,
+                kv_storage_bound: Boolean(env.PROMO_KV),
                 vapid_public_key: (env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY).slice(0, 20) + '...'
             }, null, 2), {
                 headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -180,6 +194,38 @@ async function fetchFirebasePromo() {
 }
 
 /**
+ * Mengambil status tersimpan dari KV atau memory fallback
+ */
+async function getStoredStatus(env) {
+    if (env.PROMO_KV) {
+        try {
+            const val = await env.PROMO_KV.get('last_promo_status');
+            if (val !== null && val !== undefined) return val;
+        } catch (e) {
+            console.warn('KV get error:', e);
+        }
+    }
+    return memoryLastStatus;
+}
+
+/**
+ * Menyimpan status ke KV dan memory
+ */
+async function setStoredStatus(env, status, price) {
+    if (env.PROMO_KV) {
+        try {
+            await env.PROMO_KV.put('last_promo_status', String(status));
+            await env.PROMO_KV.put('last_promo_price', String(price));
+            await env.PROMO_KV.put('last_check_time', new Date().toISOString());
+        } catch (e) {
+            console.warn('KV put error:', e);
+        }
+    }
+    memoryLastStatus = String(status);
+    memoryLastPrice = String(price);
+}
+
+/**
  * Logika Pengecekan Promo dan Broadcast Web Push
  */
 async function checkPromoAndBroadcastPush(env, forceCheck = false) {
@@ -191,17 +237,17 @@ async function checkPromoAndBroadcastPush(env, forceCheck = false) {
         const promoPrice = Number(data.promo_price) || 0;
         const formattedPrice = promoPrice > 0 ? `Rp ${promoPrice.toLocaleString('id-ID')}` : '-';
 
-        let prevStatus = null;
-        if (env.PROMO_KV) {
-            prevStatus = await env.PROMO_KV.get('last_promo_status');
-        }
+        const prevStatusStr = await getStoredStatus(env);
+        const prevBool = prevStatusStr === 'true' ? true : (prevStatusStr === 'false' ? false : null);
 
-        const prevBool = prevStatus === 'true' ? true : (prevStatus === 'false' ? false : null);
         let triggered = false;
         let pushResult = null;
 
-        // Deteksi transisi penting: status beralih dari OFF (atau awal mula) ke ON!
-        if (prevBool === false && currentStatus === true) {
+        // Pemicu Notifikasi:
+        // Kirim jika forceCheck === true ATAU jika status sekarang ON dan status sebelumnya BUKAN true
+        const shouldTrigger = forceCheck || (currentStatus === true && prevBool !== true);
+
+        if (shouldTrigger) {
             triggered = true;
 
             const payload = {
@@ -213,18 +259,15 @@ async function checkPromoAndBroadcastPush(env, forceCheck = false) {
             pushResult = await broadcastWebPush(env, payload);
         }
 
-        // Simpan status ke KV untuk putaran berikutnya
-        if (env.PROMO_KV) {
-            await env.PROMO_KV.put('last_promo_status', String(currentStatus));
-            await env.PROMO_KV.put('last_promo_price', String(promoPrice));
-            await env.PROMO_KV.put('last_check_time', new Date().toISOString());
-        }
+        // Simpan status terbaru ke KV & Memory
+        await setStoredStatus(env, currentStatus, promoPrice);
 
         return {
             checked_at: new Date().toISOString(),
             current_status: currentStatus,
             prev_status: prevBool,
             triggered,
+            force_check: forceCheck,
             push_result: pushResult
         };
     } catch (e) {
@@ -237,24 +280,37 @@ async function checkPromoAndBroadcastPush(env, forceCheck = false) {
  * Mengirimkan Web Push ke seluruh subscriber PWA yang tersimpan
  */
 async function broadcastWebPush(env, payload) {
-    const subscriptions = [];
+    const subMap = new Map();
 
+    // 1. Ambil dari KV jika ada
     if (env.PROMO_KV) {
-        const list = await env.PROMO_KV.list({ prefix: 'sub:' });
-        for (const key of list.keys) {
-            const raw = await env.PROMO_KV.get(key.name);
-            if (raw) {
-                try {
-                    const sub = JSON.parse(raw);
-                    subscriptions.push({ key: key.name, sub });
-                } catch (e) { }
+        try {
+            const list = await env.PROMO_KV.list({ prefix: 'sub:' });
+            for (const key of list.keys) {
+                const raw = await env.PROMO_KV.get(key.name);
+                if (raw) {
+                    try {
+                        const sub = JSON.parse(raw);
+                        if (sub && sub.endpoint) {
+                            subMap.set(key.name, sub);
+                        }
+                    } catch (e) { }
+                }
             }
-        }
-    } else {
-        for (const [key, sub] of memorySubscriptions.entries()) {
-            subscriptions.push({ key: `sub:${key}`, sub });
+        } catch (e) {
+            console.warn('KV list error:', e);
         }
     }
+
+    // 2. Gabungkan dengan memory subscriptions
+    for (const [key, sub] of memorySubscriptions.entries()) {
+        const fullKey = `sub:${key}`;
+        if (!subMap.has(fullKey)) {
+            subMap.set(fullKey, sub);
+        }
+    }
+
+    const subscriptions = Array.from(subMap.entries()).map(([k, v]) => ({ key: k, sub: v }));
 
     const vapidPub = env.VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
     const vapidPriv = env.VAPID_PRIVATE_KEY || DEFAULT_VAPID_PRIVATE_KEY;
@@ -269,17 +325,17 @@ async function broadcastWebPush(env, payload) {
             if (status >= 200 && status < 300) {
                 successCount++;
             } else if (status === 404 || status === 410) {
-                // Subscription kadaluarsa di browser user -> bersihkan dari KV
                 failedCount++;
                 if (env.PROMO_KV) {
-                    await env.PROMO_KV.delete(item.key);
+                    await env.PROMO_KV.delete(item.key).catch(() => {});
                 }
+                memorySubscriptions.delete(item.key.replace(/^sub:/, ''));
             } else {
                 failedCount++;
             }
         } catch (err) {
             failedCount++;
-            console.error('Error sending push to', item.sub.endpoint, err);
+            console.error('Error sending push to', item.sub?.endpoint, err);
         }
     }
 
