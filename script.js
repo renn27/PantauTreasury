@@ -338,7 +338,7 @@ const ids = [
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
     'backendStatusDot', 'backendVersionBadge', 'usdIdrTreasuryWs',
-    'markdownJual', 'markdownJualPersen', 'markdownJualCard',
+    'markdownJual', 'markdownJualCard',
     'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText'
 ];
 ids.forEach(id => {
@@ -1630,33 +1630,21 @@ function renderMarkdownJual(sellPrice, rawPriceSell) {
         ? '(0%)'
         : `(${isMarkdown ? '' : '+'}${percent.toFixed(2)}%)`;
 
+    // Cukup tampilkan nominal nilai saja (tanpa persentase di kartu agar tidak terpotong)
     dom.markdownJual.textContent = formattedDiff;
-    if (dom.markdownJualPersen) {
-        dom.markdownJualPersen.textContent = formattedPercent;
-    }
 
     dom.markdownJual.classList.remove(
         'text-red-600', 'dark:text-red-400',
         'text-green-600', 'dark:text-green-400',
         'text-gray-900', 'dark:text-gray-100'
     );
-    if (dom.markdownJualPersen) {
-        dom.markdownJualPersen.classList.remove(
-            'text-red-500', 'dark:text-red-400',
-            'text-green-500', 'dark:text-green-400',
-            'text-gray-500', 'dark:text-gray-400'
-        );
-    }
 
     if (isMarkdown) {
         dom.markdownJual.classList.add('text-red-600', 'dark:text-red-400');
-        dom.markdownJualPersen?.classList.add('text-red-500', 'dark:text-red-400');
     } else if (isMarkup) {
         dom.markdownJual.classList.add('text-green-600', 'dark:text-green-400');
-        dom.markdownJualPersen?.classList.add('text-green-500', 'dark:text-green-400');
     } else {
         dom.markdownJual.classList.add('text-gray-900', 'dark:text-gray-100');
-        dom.markdownJualPersen?.classList.add('text-gray-500', 'dark:text-gray-400');
     }
 
     if (dom.markdownJualCard) {
