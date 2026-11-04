@@ -810,7 +810,7 @@ body {
 }
 
 .stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .stats-grid .glass-card {
@@ -1734,11 +1734,25 @@ body {
       }
 
     .stats-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     }
 
     .stats-grid .glass-card {
-        padding: 0.7rem 0.75rem;
+        padding: 0.7rem 0.6rem;
+    }
+
+    @media (max-width: 520px) {
+        .stats-grid {
+            gap: 0.35rem !important;
+        }
+
+        .stats-grid .glass-card {
+            padding: 0.5rem 0.35rem !important;
+        }
+
+        .stats-card p.text-sm {
+            font-size: 0.75rem !important;
+        }
     }
 
     #cuan {

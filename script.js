@@ -338,6 +338,7 @@ const ids = [
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
     'backendStatusDot', 'backendVersionBadge', 'usdIdrTreasuryWs',
+    'markdownJual', 'markdownJualPersen', 'markdownJualCard',
     'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText'
 ];
 ids.forEach(id => {
@@ -363,6 +364,17 @@ try {
     const savedUsdWs = localStorage.getItem('treasury_usdidr_ws');
     if (savedUsdWs && dom.usdIdrTreasuryWs) {
         dom.usdIdrTreasuryWs.textContent = formatRupiah(Number(savedUsdWs));
+    }
+} catch (e) { }
+
+// Render cached Markdown Jual (WebSocket)
+try {
+    const savedMarkdown = localStorage.getItem('treasury_markdown_jual');
+    if (savedMarkdown && dom.markdownJual) {
+        const parsed = JSON.parse(savedMarkdown);
+        if (parsed && parsed.sell && parsed.raw) {
+            renderMarkdownJual(parsed.sell, parsed.raw);
+        }
     }
 } catch (e) { }
 
@@ -1598,6 +1610,70 @@ function renderUsdIdrTreasuryWs(rate) {
     } catch (e) { }
 }
 
+function renderMarkdownJual(sellPrice, rawPriceSell) {
+    if (!dom.markdownJual) return;
+    const sell = Number(sellPrice);
+    const raw = Number(rawPriceSell);
+    if (!Number.isFinite(sell) || !Number.isFinite(raw) || sell <= 0 || raw <= 0) return;
+
+    // Selisih = Harga Jual Realisasi Treasury - Harga Dasar Acuan Dunia (Rupiah)
+    const diff = sell - raw;
+    const percent = (diff / raw) * 100;
+
+    const isMarkdown = diff < 0;
+    const isMarkup = diff > 0;
+
+    const formattedDiff = diff === 0
+        ? 'Rp 0'
+        : `${isMarkdown ? '-' : '+'}${formatRupiah(Math.abs(diff))}`;
+    const formattedPercent = diff === 0
+        ? '(0%)'
+        : `(${isMarkdown ? '' : '+'}${percent.toFixed(2)}%)`;
+
+    dom.markdownJual.textContent = formattedDiff;
+    if (dom.markdownJualPersen) {
+        dom.markdownJualPersen.textContent = formattedPercent;
+    }
+
+    dom.markdownJual.classList.remove(
+        'text-red-600', 'dark:text-red-400',
+        'text-green-600', 'dark:text-green-400',
+        'text-gray-900', 'dark:text-gray-100'
+    );
+    if (dom.markdownJualPersen) {
+        dom.markdownJualPersen.classList.remove(
+            'text-red-500', 'dark:text-red-400',
+            'text-green-500', 'dark:text-green-400',
+            'text-gray-500', 'dark:text-gray-400'
+        );
+    }
+
+    if (isMarkdown) {
+        dom.markdownJual.classList.add('text-red-600', 'dark:text-red-400');
+        dom.markdownJualPersen?.classList.add('text-red-500', 'dark:text-red-400');
+    } else if (isMarkup) {
+        dom.markdownJual.classList.add('text-green-600', 'dark:text-green-400');
+        dom.markdownJualPersen?.classList.add('text-green-500', 'dark:text-green-400');
+    } else {
+        dom.markdownJual.classList.add('text-gray-900', 'dark:text-gray-100');
+        dom.markdownJualPersen?.classList.add('text-gray-500', 'dark:text-gray-400');
+    }
+
+    if (dom.markdownJualCard) {
+        dom.markdownJualCard.title = `Harga Dasar Acuan: ${formatRupiah(raw)}/g | Harga Jual Treasury: ${formatRupiah(sell)}/g | Selisih: ${formattedDiff}/g ${formattedPercent}`;
+    }
+
+    try {
+        localStorage.setItem('treasury_markdown_jual', JSON.stringify({
+            sell,
+            raw,
+            diff,
+            percent,
+            savedAt: Date.now()
+        }));
+    } catch (e) { }
+}
+
 function updateTreasuryWsStatus(status) {
     if (!dom.treasuryWsBadge || !dom.treasuryWsBadgeText) return;
 
@@ -1691,6 +1767,14 @@ function handleTreasuryPusherEvent(raw) {
         // 3. Render Card Baru USD/IDR Treasury (dari WebSocket)
         if (payload.usdidr) {
             renderUsdIdrTreasuryWs(payload.usdidr);
+        }
+
+        // 4. Render Card Baru Markdown/Markup Jual (dari WebSocket)
+        if (payload.rupiah_price_sell !== undefined || (payload.usd_price_sell && payload.usdidr)) {
+            const rawSell = Number(payload.rupiah_price_sell) || Math.round(Number(payload.usd_price_sell) * Number(payload.usdidr));
+            if (rawSell > 0) {
+                renderMarkdownJual(sell, rawSell);
+            }
         }
 
 

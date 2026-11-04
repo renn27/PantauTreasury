@@ -28,8 +28,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20261103085148">
-    <link rel="stylesheet" href="style.css?v=20261103085148">
+    <link rel="stylesheet" href="tailwind.css?v=20261104144624">
+    <link rel="stylesheet" href="style.css?v=20261104144624">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -291,7 +291,7 @@
 
                     <!-- ROW 3: Ringkasan transaksi -->
                     <div class="stats-row min-h-0">
-                        <div class="stats-grid grid grid-cols-4 gap-2">
+                        <div class="stats-grid grid grid-cols-5 gap-2">
                             <!-- Gram Beli 60jt -->
                             <div class="stats-card glass-card rounded-lg p-3 card-hover card-elevated">
                                 <div class="flex items-center mb-1.5">
@@ -344,6 +344,31 @@
                                 <p id="usdIdrTreasuryWs"
                                     class="text-sm font-bold text-gray-900 dark:text-gray-100 text-ellipsis font-numeric">
                                     -</p>
+                            </div>
+
+                            <!-- Markdown Jual (dari WebSocket) -->
+                            <div id="markdownJualCard" class="stats-card glass-card rounded-lg p-3 card-hover card-elevated"
+                                title="Selisih harga jual (buyback) Treasury terhadap harga dasar pasar dunia rupiah">
+                                <div class="flex items-center mb-1.5">
+                                    <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6">
+                                        </path>
+                                    </svg>
+                                    <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 text-ellipsis">
+                                        Markdown Jual
+                                    </p>
+                                </div>
+                                <div class="flex items-baseline gap-1 flex-wrap">
+                                    <p id="markdownJual"
+                                        class="text-sm font-bold text-red-600 dark:text-red-400 text-ellipsis font-numeric">
+                                        -
+                                    </p>
+                                    <span id="markdownJualPersen"
+                                        class="text-xxs font-semibold text-red-500/80 dark:text-red-400/80 font-numeric">
+                                    </span>
+                                </div>
                             </div>
 
                             <!-- Cuan -->
@@ -685,7 +710,7 @@
             <div class="status-footer-brand">
                 <span class="status-footer-title">Pantau Treasury</span>
                 <span id="appVersionBadge" class="status-footer-version"
-                    title="Versi Frontend (GitHub Pages)">v26.11.03.2</span>
+                    title="Versi Frontend (GitHub Pages)">v26.11.04.1</span>
                 <span id="backendVersionBadge" class="status-footer-version" title="Versi Backend Vercel"
                     style="display: none;">API: -</span>
             </div>
@@ -765,7 +790,7 @@
     <!-- Pusher JS Library -->
     <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js" defer></script>
     <!-- Script -->
-    <script src="script.js?v=20261103085148" defer></script>
+    <script src="script.js?v=20261104144624" defer></script>
 </body>
 
 </html>
