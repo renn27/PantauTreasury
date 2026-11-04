@@ -2854,7 +2854,7 @@ function buildSimulationTemplate(mode) {
                 <p class="text-xxs text-gray-600 dark:text-gray-400 mb-1">Selisih Gram</p>
                 <p data-slot="gramDiff" class="text-base font-bold font-numeric">-</p>
             </div>
-            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg relative cursor-pointer group hover:opacity-95 transition-all duration-200" 
+            <div class="simulation-result-tile simulation-result-tone-neutral p-2.5 rounded-lg relative cursor-pointer group transition-all duration-200" 
                  data-metric="profitLoss" 
                  role="button" 
                  tabindex="0" 
