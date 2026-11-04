@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pantau-treasury-v26.11.04.1';
+const CACHE_NAME = 'pantau-treasury-v26.11.04.2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -86,6 +86,63 @@ self.addEventListener('fetch', (event) => {
         });
 
       return cachedResponse || fetchPromise;
+    })
+  );
+});
+
+// ==========================================
+// PWA Web Push Notification Listeners
+// ==========================================
+self.addEventListener('push', (event) => {
+  let data = {
+    title: '🚨 Promo Treasury ON!',
+    body: 'Paket promo Treasury aktif sekarang! Segera amankan kuota Anda.',
+    url: './'
+  };
+
+  try {
+    if (event.data) {
+      const parsed = event.data.json();
+      data = { ...data, ...parsed };
+    }
+  } catch (e) {
+    if (event.data) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: './icon.png',
+    badge: './icon.png',
+    vibrate: [200, 100, 200, 100, 200],
+    data: { url: data.url || './' },
+    actions: [
+      { action: 'open', title: 'Buka Dashboard' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || './';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Jika tab sudah terbuka, bawa ke depan
+      for (let client of windowClients) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      // Jika belum terbuka, buka window baru
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
     })
   );
 });

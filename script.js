@@ -127,7 +127,12 @@ let state = {
     isClockSynced: false,
     bestClockSyncRtt: Infinity,
     lastDisplayedSecond: 0,
-    lastWatchdogFetchTime: 0
+    lastWatchdogFetchTime: 0,
+    promoStatus: null,
+    promoPrice: null,
+    promoHistory: [],
+    promoEventSource: null,
+    promoPollIntervalId: null
 };
 
 /* ================= SERVER TIME SYNCHRONIZATION (LANGSUNG DARI KONEKSI SERVER TREASURY) ================= */
@@ -339,7 +344,9 @@ const ids = [
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
     'backendStatusDot', 'backendStatusBadge', 'backendVersionBadge', 'usdIdrTreasuryWs',
     'markdownJual', 'markdownJualCard',
-    'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText'
+    'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText',
+    'promoCard', 'promoStatusText', 'promoBatasHarga', 'promoStatusDot',
+    'promoHistoryDropdown', 'promoHistoryList', 'promoHistoryCount'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
@@ -377,6 +384,10 @@ try {
         }
     }
 } catch (e) { }
+
+// Render cached Promo data immediately & connect live feed
+loadCachedPromoData();
+initPromoFeed();
 
 function debugLog(...args) {
     if (DEBUG) console.log(...args);
@@ -942,6 +953,7 @@ function togglePriceHistoryDropdown(type, forceOpen) {
         const otherType = type === 'buy' ? 'sell' : 'buy';
         togglePriceHistoryDropdown(otherType, false);
         toggleUsdIdrHistoryDropdown(false);
+        togglePromoHistoryDropdown(false);
         renderPriceHistoryDropdown(type, true);
         // Pasang event delegation setelah render
         const { list } = getPriceHistoryElements(type);
@@ -1330,6 +1342,7 @@ function toggleUsdIdrHistoryDropdown(forceOpen) {
     if (shouldOpen) {
         togglePriceHistoryDropdown('buy', false);
         togglePriceHistoryDropdown('sell', false);
+        togglePromoHistoryDropdown(false);
         renderUsdIdrHistoryDropdown(true);
     }
 }
@@ -1405,6 +1418,320 @@ function closeUsdIdrFeed() {
         state.usdIdrWs.close();
         state.usdIdrWs = null;
     }
+}
+
+/* ================= STATUS PROMO TREASURY (FIREBASE SSE & REST FEED) ================= */
+const PROMO_FIREBASE_SETTINGS_URL = 'https://monitor-treasury-default-rtdb.firebaseio.com/admin_settings.json';
+const PROMO_FIREBASE_HISTORY_URL = 'https://monitor-treasury-default-rtdb.firebaseio.com/promo_price_history.json';
+
+function loadCachedPromoData() {
+    try {
+        const savedSettings = localStorage.getItem('promo_settings_cache');
+        if (savedSettings) {
+            const parsed = JSON.parse(savedSettings);
+            if (parsed && typeof parsed.promo_status === 'boolean') {
+                state.promoStatus = parsed.promo_status;
+                state.promoPrice = Number(parsed.promo_price) || null;
+                updatePromoUI(state.promoStatus, state.promoPrice);
+            }
+        }
+        const savedHistory = localStorage.getItem('promo_history_cache');
+        if (savedHistory) {
+            const parsedHistory = JSON.parse(savedHistory);
+            if (Array.isArray(parsedHistory) && parsedHistory.length) {
+                state.promoHistory = parsedHistory;
+                renderPromoHistoryDropdown();
+            }
+        }
+    } catch (e) { }
+}
+
+function updatePromoUI(isOn, promoPrice) {
+    if (dom.promoStatusText) {
+        if (isOn === true) {
+            dom.promoStatusText.textContent = 'PROMO ON';
+            dom.promoStatusText.className = 'text-sm font-bold text-emerald-600 dark:text-emerald-400 font-numeric tracking-tight truncate';
+        } else if (isOn === false) {
+            dom.promoStatusText.textContent = 'PROMO OFF';
+            dom.promoStatusText.className = 'text-sm font-bold text-red-500 dark:text-red-400 font-numeric tracking-tight truncate';
+        } else {
+            dom.promoStatusText.textContent = '-';
+            dom.promoStatusText.className = 'text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight truncate';
+        }
+    }
+
+    if (dom.promoStatusDot) {
+        if (isOn === true) {
+            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0 transition-colors';
+            dom.promoStatusDot.title = 'Status: Promo Treasury Sedang Aktif!';
+        } else if (isOn === false) {
+            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-400 dark:bg-red-500 flex-shrink-0 transition-colors';
+            dom.promoStatusDot.title = 'Status: Promo Tidak Aktif';
+        } else {
+            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0 transition-colors';
+            dom.promoStatusDot.title = 'Status: Memuat...';
+        }
+    }
+
+    if (dom.promoBatasHarga) {
+        if (promoPrice && Number(promoPrice) > 0) {
+            const formatted = formatRupiah(Number(promoPrice));
+            dom.promoBatasHarga.textContent = `≤ ${formatted}`;
+            dom.promoBatasHarga.title = `Batas harga promo Treasury: ${formatted}`;
+        } else {
+            dom.promoBatasHarga.textContent = '-';
+            dom.promoBatasHarga.title = 'Batas harga promo beli';
+        }
+    }
+}
+
+function triggerPromoNotification(price) {
+    // 1. Suara notifikasi lembut via Web Audio API synth
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, now);        // C5
+            osc.frequency.setValueAtTime(659.25, now + 0.12); // E5
+            osc.frequency.setValueAtTime(783.99, now + 0.24); // G5
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+            osc.start(now);
+            osc.stop(now + 0.55);
+        }
+    } catch (e) { }
+
+    // 2. Browser Desktop/Mobile Notification (Web Notification)
+    if (typeof window.Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+            const priceText = price ? ` dengan batas harga ${formatRupiah(price)}` : '';
+            new Notification('🔥 PROMO TREASURY AKTIF!', {
+                body: `Promo Treasury sedang ON${priceText}! Segera buka aplikasi untuk eksekusi.`,
+                icon: './assets/icons/icon-192.png',
+                tag: 'treasury-promo-alert'
+            });
+        } catch (e) { }
+    }
+}
+
+function renderPromoHistoryDropdown(forceRender = false) {
+    if (!dom.promoHistoryList) return;
+
+    const history = state.promoHistory || [];
+    if (dom.promoHistoryCount) {
+        dom.promoHistoryCount.textContent = `${history.length} data`;
+    }
+
+    if (!forceRender && dom.promoHistoryDropdown && dom.promoHistoryDropdown.classList.contains('hidden')) {
+        return;
+    }
+
+    if (!history.length) {
+        dom.promoHistoryList.innerHTML = '<p class="price-history-empty">Belum ada riwayat status promo</p>';
+        return;
+    }
+
+    const savedScrollTop = dom.promoHistoryList.scrollTop;
+    dom.promoHistoryList.innerHTML = history
+        .slice()
+        .reverse()
+        .map(item => {
+            const isPromoOn = item.status === 'ON' || item.status === true;
+            const badgeClass = isPromoOn ? 'promo-pill-on' : 'promo-pill-off';
+            const badgeLabel = isPromoOn ? 'ON' : 'OFF';
+
+            const timeStr = item.time ? String(item.time).replace(/\./g, ':') : '-';
+            const dateStr = item.date || '';
+            const priceVal = item.price || item.promo_price_after || item.promo_price_before || 0;
+            const formattedPrice = priceVal ? formatRupiah(Number(priceVal)) : '-';
+            const reasonStr = item.reason ? `Alasan: ${item.reason}` : '';
+            const tooltip = `${dateStr} ${timeStr} WIB\nStatus: ${badgeLabel}\nHarga: ${formattedPrice}${reasonStr ? '\n' + reasonStr : ''}`;
+
+            return `
+            <div class="promo-history-item font-numeric" title="${tooltip}">
+                <div class="flex flex-col min-w-0">
+                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">${timeStr}</span>
+                    <span class="text-xxs text-gray-600 dark:text-gray-400 truncate">${dateStr}</span>
+                </div>
+                <div class="flex flex-col min-w-0">
+                    <span class="font-semibold text-gray-700 dark:text-gray-300 truncate">${formattedPrice}</span>
+                    ${item.reason ? `<span class="text-xxs text-gray-600 dark:text-gray-400 truncate" title="${item.reason}">${item.reason}</span>` : ''}
+                </div>
+                <div class="text-right flex items-center justify-end flex-shrink-0">
+                    <span class="promo-pill-badge ${badgeClass}">${badgeLabel}</span>
+                </div>
+            </div>
+            `;
+        })
+        .join('');
+
+    if (savedScrollTop > 0) {
+        dom.promoHistoryList.scrollTop = savedScrollTop;
+    }
+}
+
+function togglePromoHistoryDropdown(forceOpen) {
+    if (!dom.promoCard || !dom.promoHistoryDropdown) return;
+
+    const shouldOpen = forceOpen === undefined
+        ? dom.promoHistoryDropdown.classList.contains('hidden')
+        : forceOpen;
+
+    dom.promoHistoryDropdown.classList.toggle('hidden', !shouldOpen);
+    dom.promoCard.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+    if (shouldOpen) {
+        togglePriceHistoryDropdown('buy', false);
+        togglePriceHistoryDropdown('sell', false);
+        toggleUsdIdrHistoryDropdown(false);
+        renderPromoHistoryDropdown(true);
+    }
+}
+
+async function fetchPromoHistoryREST() {
+    try {
+        const resp = await fetch(PROMO_FIREBASE_HISTORY_URL);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data || typeof data !== 'object') return;
+
+        const list = Object.entries(data).map(([key, val]) => ({
+            id: key,
+            ...val,
+            timestamp: val.timestamp || (val.time ? Date.now() : 0)
+        }));
+
+        list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+        state.promoHistory = list;
+        try {
+            localStorage.setItem('promo_history_cache', JSON.stringify(list));
+        } catch (e) { }
+
+        renderPromoHistoryDropdown();
+    } catch (e) {
+        debugLog('Failed to fetch promo history', e);
+    }
+}
+
+function handlePromoSettingsData(data, allowAlert = true) {
+    if (!data) return;
+
+    const newStatus = typeof data.promo_status === 'boolean'
+        ? data.promo_status
+        : (data.promo_status === 'true' || data.promo_status === 1);
+
+    const rawPrice = data.promo_price !== undefined ? data.promo_price : state.promoPrice;
+    const newPrice = Number(rawPrice) || state.promoPrice || null;
+
+    const previousStatus = state.promoStatus;
+    const statusChanged = previousStatus !== null && previousStatus !== newStatus;
+
+    state.promoStatus = newStatus;
+    state.promoPrice = newPrice;
+
+    try {
+        localStorage.setItem('promo_settings_cache', JSON.stringify({
+            promo_status: newStatus,
+            promo_price: newPrice,
+            updated_at: Date.now()
+        }));
+    } catch (e) { }
+
+    updatePromoUI(newStatus, newPrice);
+
+    if (statusChanged) {
+        if (newStatus === true && allowAlert) {
+            triggerPromoNotification(newPrice);
+        }
+        fetchPromoHistoryREST();
+    }
+}
+
+function connectPromoEventSource() {
+    if (typeof window.EventSource === 'undefined') {
+        if (!state.promoPollIntervalId) {
+            state.promoPollIntervalId = setInterval(async () => {
+                try {
+                    const resp = await fetch(PROMO_FIREBASE_SETTINGS_URL);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        handlePromoSettingsData(data, true);
+                    }
+                } catch (e) { }
+            }, 30000);
+        }
+        return;
+    }
+
+    if (state.promoEventSource) {
+        state.promoEventSource.close();
+        state.promoEventSource = null;
+    }
+
+    try {
+        const es = new EventSource(PROMO_FIREBASE_SETTINGS_URL);
+        state.promoEventSource = es;
+
+        es.addEventListener('put', (event) => {
+            try {
+                const parsed = JSON.parse(event.data);
+                if (!parsed) return;
+                if (parsed.path === '/' && parsed.data) {
+                    handlePromoSettingsData(parsed.data, true);
+                } else if (parsed.path === '/promo_status') {
+                    handlePromoSettingsData({
+                        promo_status: parsed.data,
+                        promo_price: state.promoPrice
+                    }, true);
+                } else if (parsed.path === '/promo_price') {
+                    handlePromoSettingsData({
+                        promo_status: state.promoStatus,
+                        promo_price: parsed.data
+                    }, false);
+                }
+            } catch (e) { }
+        });
+
+        es.addEventListener('patch', (event) => {
+            try {
+                const parsed = JSON.parse(event.data);
+                if (parsed && parsed.data) {
+                    handlePromoSettingsData(parsed.data, true);
+                }
+            } catch (e) { }
+        });
+
+        es.onerror = () => {
+            // EventSource browser otomatis reconnect dengan exponential backoff
+        };
+    } catch (e) {
+        debugLog('Promo EventSource error', e);
+    }
+}
+
+async function initPromoFeed() {
+    loadCachedPromoData();
+    fetchPromoHistoryREST();
+
+    try {
+        const resp = await fetch(PROMO_FIREBASE_SETTINGS_URL);
+        if (resp.ok) {
+            const data = await resp.json();
+            handlePromoSettingsData(data, false);
+        }
+    } catch (e) { }
+
+    connectPromoEventSource();
 }
 
 /* ================= WEBSOCKET HANDLERS (VERSI MANDIRI) ================= */
@@ -2335,6 +2662,30 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
     });
 
+    if (dom.promoCard) {
+        dom.promoCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof window.Notification !== 'undefined' && Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => { });
+            }
+            togglePromoHistoryDropdown();
+        });
+
+        dom.promoCard.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof window.Notification !== 'undefined' && Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => { });
+            }
+            togglePromoHistoryDropdown();
+        });
+    }
+
+    dom.promoHistoryDropdown?.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
     [
         { type: 'buy', card: dom.buyPriceCard, dropdown: dom.buyPriceHistoryDropdown },
         { type: 'sell', card: dom.sellPriceCard, dropdown: dom.sellPriceHistoryDropdown }
@@ -2415,6 +2766,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.settingsMenu.classList.add('hidden');
         }
         toggleUsdIdrHistoryDropdown(false);
+        togglePromoHistoryDropdown(false);
         togglePriceHistoryDropdown('buy', false);
         togglePriceHistoryDropdown('sell', false);
         toggleProfitHistoryDropdown('buy', false);

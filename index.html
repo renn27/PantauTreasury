@@ -28,8 +28,8 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="tailwind.css?v=20261104151700">
-    <link rel="stylesheet" href="style.css?v=20261104151700">
+    <link rel="stylesheet" href="tailwind.css?v=20261104190500">
+    <link rel="stylesheet" href="style.css?v=20261104190500">
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"
@@ -389,6 +389,54 @@
                                     </p>
                                 </div>
                                 <p id="cuan" class="text-sm font-bold text-ellipsis font-numeric">-</p>
+                            </div>
+
+                            <!-- Status Promo (Klik untuk Riwayat Promo) -->
+                            <div id="promoCard"
+                                class="stats-card glass-card rounded-lg p-3 card-hover card-elevated relative cursor-pointer group"
+                                role="button" tabindex="0" aria-expanded="false"
+                                aria-controls="promoHistoryDropdown"
+                                title="Klik untuk melihat riwayat status promo Treasury">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <div class="flex items-center min-w-0">
+                                        <svg class="stats-card-icon ui-icon w-3.5 h-3.5 mr-1.5 flex-shrink-0" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z">
+                                            </path>
+                                        </svg>
+                                        <p class="text-xxs font-medium text-gray-600 dark:text-gray-400 truncate">
+                                            Status Promo
+                                        </p>
+                                    </div>
+                                    <span id="promoStatusDot" class="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0 transition-colors" title="Status: Memuat..."></span>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-1">
+                                    <p id="promoStatusText" class="text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight truncate">
+                                        -
+                                    </p>
+                                    <span id="promoBatasHarga" class="text-xxs font-medium text-gray-500 dark:text-gray-400 font-numeric truncate" title="Batas harga beli promo">
+                                        -
+                                    </span>
+                                </div>
+
+                                <!-- Dropdown Riwayat Promo -->
+                                <div id="promoHistoryDropdown"
+                                    class="price-history-dropdown promo-history-dropdown price-history-dropdown-right hidden"
+                                    aria-label="Riwayat Status Promo">
+                                    <div class="price-history-heading">
+                                        <span>Riwayat Status Promo</span>
+                                        <span id="promoHistoryCount">0 data</span>
+                                    </div>
+                                    <div class="promo-history-subheader font-numeric">
+                                        <span>Waktu</span>
+                                        <span>Batas / Harga</span>
+                                        <span class="text-right">Status</span>
+                                    </div>
+                                    <div id="promoHistoryList" class="price-history-list promo-history-list">
+                                        <p class="price-history-empty">Menunggu data promo...</p>
+                                    </div>
+                                </div>
                             </div>
 
                         </div>
@@ -795,7 +843,7 @@
     <!-- Pusher JS Library -->
     <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js" defer></script>
     <!-- Script -->
-    <script src="script.js?v=20261104144624" defer></script>
+    <script src="script.js?v=20261104190500" defer></script>
 </body>
 
 </html>

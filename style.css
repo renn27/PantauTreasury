@@ -759,6 +759,100 @@ body {
     font-weight: 600;
 }
 
+/* Khusus Dropdown & Item Riwayat Promo (3 Kolom: Waktu & Tanggal, Batas / Harga, Status) */
+.promo-history-dropdown {
+    width: min(22rem, 92vw);
+    background: #ffffff !important;
+}
+
+.dark .promo-history-dropdown {
+    background: #1e293b !important;
+}
+
+.promo-history-subheader {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr 3.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+    border-bottom: var(--border-light);
+    background: #f8fafc !important;
+}
+
+.dark .promo-history-subheader {
+    color: #94a3b8;
+    background: #0f172a !important;
+    border-bottom: var(--border-dark);
+}
+
+.promo-history-list {
+    max-height: 14rem;
+}
+
+.promo-history-item {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr 3.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.45rem;
+    padding: 0.42rem 0.65rem;
+    color: #111827;
+    font-size: 0.72rem;
+    transition: background-color 0.15s ease;
+}
+
+.promo-history-item:hover {
+    background: #f8fafc;
+}
+
+.dark .promo-history-item {
+    color: #f8fafc;
+}
+
+.dark .promo-history-item:hover {
+    background: rgba(51, 65, 85, 0.72);
+}
+
+.promo-pill-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.promo-pill-on {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.dark .promo-pill-on {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.promo-pill-off {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.dark .promo-pill-off {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
 .profit-history-price {
     font-weight: 700;
     text-align: right;
@@ -851,7 +945,7 @@ body {
 }
 
 .stats-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .stats-grid .glass-card {
@@ -1782,7 +1876,7 @@ body {
       }
 
     .stats-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     }
 
     .stats-grid .glass-card {
