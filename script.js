@@ -346,7 +346,8 @@ const ids = [
     'markdownJual', 'markdownJualCard',
     'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText',
     'promoCard', 'promoStatusText', 'promoBatasHarga', 'promoStatusDot',
-    'promoHistoryDropdown', 'promoHistoryList', 'promoHistoryCount'
+    'promoHistoryDropdown', 'promoHistoryList', 'promoHistoryCount',
+    'pwaNotifDot', 'pwaNotifStatusText', 'pwaNotifToggleBtn', 'pwaNotifTestBtn'
 ];
 ids.forEach(id => {
     dom[id] = document.getElementById(id);
@@ -1734,6 +1735,169 @@ async function initPromoFeed() {
     connectPromoEventSource();
 }
 
+/* ================= PWA WEB PUSH PROMO NOTIFICATIONS ================= */
+const PWA_VAPID_PUBLIC_KEY = 'BAAxHYI3EH7oFyKkwfd9P-TIpAfhEl5GD9WzP74nckzJa_NtmCxr-p9WDIHjpJO7soyltRMJFXaGwWIzNDoK4vc';
+let promoWorkerBaseUrl = '';
+try {
+    promoWorkerBaseUrl = localStorage.getItem('promo_worker_url') || '';
+} catch (e) { }
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function updatePwaNotificationUI() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (dom.pwaNotifStatusText) dom.pwaNotifStatusText.textContent = 'Tidak Didukung Browser';
+        if (dom.pwaNotifToggleBtn) dom.pwaNotifToggleBtn.style.display = 'none';
+        return;
+    }
+
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        const isSubscribed = Boolean(sub);
+
+        if (dom.pwaNotifDot) {
+            dom.pwaNotifDot.className = isSubscribed
+                ? 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0'
+                : 'w-2 h-2 rounded-full bg-gray-400 flex-shrink-0';
+        }
+        if (dom.pwaNotifStatusText) {
+            dom.pwaNotifStatusText.textContent = isSubscribed ? 'Notif PWA: Aktif (24 Jam)' : 'Notif PWA: Mati';
+        }
+        if (dom.pwaNotifToggleBtn) {
+            dom.pwaNotifToggleBtn.textContent = isSubscribed ? 'Matikan' : 'Aktifkan';
+            dom.pwaNotifToggleBtn.className = isSubscribed
+                ? 'px-2 py-0.5 text-xxs font-semibold rounded bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-200 transition-colors'
+                : 'px-2 py-0.5 text-xxs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors';
+        }
+        if (dom.pwaNotifTestBtn) {
+            dom.pwaNotifTestBtn.classList.toggle('hidden', !isSubscribed);
+        }
+    } catch (e) {
+        debugLog('PWA Push UI update error', e);
+    }
+}
+
+async function togglePwaPushSubscription() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        alert('Browser atau perangkat ini tidak mendukung Web Push Notification.');
+        return;
+    }
+
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const existingSub = await reg.pushManager.getSubscription();
+
+        if (existingSub) {
+            const btn = dom.pwaNotifToggleBtn;
+            if (btn) btn.disabled = true;
+
+            await existingSub.unsubscribe();
+            if (promoWorkerBaseUrl) {
+                fetch(`${promoWorkerBaseUrl}/unsubscribe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint: existingSub.endpoint })
+                }).catch(() => { });
+            }
+            try {
+                localStorage.removeItem('pwa_push_subscribed');
+            } catch (e) { }
+            await updatePwaNotificationUI();
+            if (btn) btn.disabled = false;
+        } else {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                alert('Izin notifikasi tidak diberikan. Mohon aktifkan izin notifikasi di pengaturan browser Anda.');
+                return;
+            }
+
+            const btn = dom.pwaNotifToggleBtn;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Mendaftar...';
+            }
+
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(PWA_VAPID_PUBLIC_KEY)
+            });
+
+            if (!promoWorkerBaseUrl) {
+                const inputUrl = prompt(
+                    'Masukkan URL Cloudflare Worker Anda (contoh: https://pantau-treasury-promo.<subdomain>.workers.dev):',
+                    ''
+                );
+                if (inputUrl && inputUrl.trim()) {
+                    promoWorkerBaseUrl = inputUrl.trim().replace(/\/+$/, '');
+                    try {
+                        localStorage.setItem('promo_worker_url', promoWorkerBaseUrl);
+                    } catch (e) { }
+                }
+            }
+
+            if (promoWorkerBaseUrl) {
+                try {
+                    await fetch(`${promoWorkerBaseUrl}/subscribe`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sub)
+                    });
+                } catch (err) {
+                    console.warn('Sync subscription to worker failed:', err);
+                }
+            }
+
+            try {
+                localStorage.setItem('pwa_push_subscribed', 'true');
+            } catch (e) { }
+            await updatePwaNotificationUI();
+            if (btn) btn.disabled = false;
+
+            try {
+                reg.showNotification('🎉 Notifikasi PWA Berhasil Diaktifkan!', {
+                    body: 'Perangkat ini siap menerima alarm saat promo Treasury berstatus ON.',
+                    icon: './icon.png',
+                    badge: './icon.png',
+                    vibrate: [200, 100, 200]
+                });
+            } catch (e) { }
+        }
+    } catch (e) {
+        alert('Gagal mengaktifkan notifikasi PWA: ' + (e.message || e));
+        if (dom.pwaNotifToggleBtn) dom.pwaNotifToggleBtn.disabled = false;
+        updatePwaNotificationUI();
+    }
+}
+
+async function triggerLocalOrRemoteTestPush() {
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification('🔔 TES NOTIFIKASI PWA TREASURY', {
+            body: `Web Push Berhasil! Notifikasi PWA berjalan sempurna di perangkat ini. (${new Date().toLocaleTimeString('id-ID')} WIB)`,
+            icon: './icon.png',
+            badge: './icon.png',
+            vibrate: [200, 100, 200, 100, 200],
+            data: { url: './' }
+        });
+
+        if (promoWorkerBaseUrl) {
+            fetch(`${promoWorkerBaseUrl}/test-push`).catch(() => { });
+        }
+    } catch (e) {
+        alert('Gagal menampilkan tes notifikasi: ' + e.message);
+    }
+}
+
 /* ================= WEBSOCKET HANDLERS (VERSI MANDIRI) ================= */
 function setupUsdIdrWsHandlers(ws) {
     const startPing = () => {
@@ -2685,6 +2849,18 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.promoHistoryDropdown?.addEventListener('click', (e) => {
         e.stopPropagation();
     });
+
+    dom.pwaNotifToggleBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePwaPushSubscription();
+    });
+
+    dom.pwaNotifTestBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        triggerLocalOrRemoteTestPush();
+    });
+
+    updatePwaNotificationUI();
 
     [
         { type: 'buy', card: dom.buyPriceCard, dropdown: dom.buyPriceHistoryDropdown },

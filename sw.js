@@ -94,37 +94,49 @@ self.addEventListener('fetch', (event) => {
 // PWA Web Push Notification Listeners
 // ==========================================
 self.addEventListener('push', (event) => {
-  let data = {
-    title: '🚨 Promo Treasury ON!',
-    body: 'Paket promo Treasury aktif sekarang! Segera amankan kuota Anda.',
-    url: './'
-  };
+  event.waitUntil((async () => {
+    let title = '🔥 PROMO TREASURY AKTIF (ON)!';
+    let body = 'Promo Treasury sedang aktif! Segera buka aplikasi untuk eksekusi.';
+    let url = './';
 
-  try {
     if (event.data) {
-      const parsed = event.data.json();
-      data = { ...data, ...parsed };
+      try {
+        const parsed = event.data.json();
+        if (parsed.title) title = parsed.title;
+        if (parsed.body) body = parsed.body;
+        if (parsed.url) url = parsed.url;
+      } catch (e) {
+        const txt = event.data.text();
+        if (txt) body = txt;
+      }
+    } else {
+      // Fallback: Jika push diterima tanpa payload, fetch data harga live dari Firebase
+      try {
+        const res = await fetch('https://monitor-treasury-default-rtdb.firebaseio.com/admin_settings.json');
+        if (res.ok) {
+          const d = await res.json();
+          if (d && d.promo_price) {
+            body = `Batas beli promo: Rp ${Number(d.promo_price).toLocaleString('id-ID')} | Buka aplikasi sekarang!`;
+          }
+        }
+      } catch (e) { }
     }
-  } catch (e) {
-    if (event.data) {
-      data.body = event.data.text();
-    }
-  }
 
-  const options = {
-    body: data.body,
-    icon: './icon.png',
-    badge: './icon.png',
-    vibrate: [200, 100, 200, 100, 200],
-    data: { url: data.url || './' },
-    actions: [
-      { action: 'open', title: 'Buka Dashboard' }
-    ]
-  };
+    const options = {
+      body: body,
+      icon: './icon.png',
+      badge: './icon.png',
+      vibrate: [200, 100, 200, 100, 200],
+      tag: 'treasury-promo-push',
+      renotify: true,
+      data: { url: url },
+      actions: [
+        { action: 'open', title: 'Buka Dashboard' }
+      ]
+    };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+    return self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
