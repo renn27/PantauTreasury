@@ -1,0 +1,21 @@
+name = "pantau-treasury-promo"
+main = "promo-monitor.js"
+compatibility_date = "2024-11-01"
+
+# Jadwal Cron Trigger: berjalan otomatis setiap 1 menit 24/7 gratis
+[triggers]
+crons = ["* * * * *"]
+
+# KV Namespace untuk menyimpan status promo terakhir
+# Buat KV dengan perintah: npx wrangler kv:namespace create PROMO_KV
+# Lalu masukkan id yang didapat ke bawah ini:
+# [[kv_namespaces]]
+# binding = "PROMO_KV"
+# id = "YOUR_KV_NAMESPACE_ID"
+
+# Variabel Lingkungan (dapat juga disetel lewat Dashboard Cloudflare Settings -> Variables)
+# [vars]
+# TELEGRAM_BOT_TOKEN = "your-bot-token"
+# TELEGRAM_CHAT_ID = "your-chat-id"
+# NOTIFY_ON_OFF = "false"
+
