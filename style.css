@@ -213,12 +213,12 @@ body {
     color: #94a3b8;
 }
 
-/* ===== TREASURY WEBSOCKET LIVE BADGE ===== */
+/* ===== TREASURY WEBSOCKET & STATUS LIVE BADGE ===== */
 .treasury-ws-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.2rem 0.55rem;
+    gap: 0.3rem;
+    padding: 0.18rem 0.45rem;
     border-radius: 9999px;
     font-size: 0.65rem;
     font-weight: 700;
@@ -311,6 +311,25 @@ body {
 .treasury-ws-badge.ws-fallback .treasury-ws-dot {
     background-color: #94a3b8;
     box-shadow: none;
+}
+
+/* State: Error / Offline */
+.treasury-ws-badge.ws-error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+
+.dark .treasury-ws-badge.ws-error {
+    background: rgba(127, 29, 29, 0.45);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+.treasury-ws-badge.ws-error .treasury-ws-dot {
+    background-color: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+    animation: ws-dot-pulse 1s ease-in-out infinite;
 }
 
 .update-info-progress {

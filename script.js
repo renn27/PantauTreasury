@@ -337,7 +337,7 @@ const ids = [
     'usdIdrHistoryDropdown', 'usdIdrHistoryList', 'usdIdrHistoryCount',
     'buyPriceHistoryDropdown', 'buyPriceHistoryList', 'buyPriceHistoryCount',
     'sellPriceHistoryDropdown', 'sellPriceHistoryList', 'sellPriceHistoryCount',
-    'backendStatusDot', 'backendVersionBadge', 'usdIdrTreasuryWs',
+    'backendStatusDot', 'backendStatusBadge', 'backendVersionBadge', 'usdIdrTreasuryWs',
     'markdownJual', 'markdownJualCard',
     'treasuryWsBadge', 'treasuryWsBadgeDot', 'treasuryWsBadgeText'
 ];
@@ -1075,13 +1075,13 @@ function setUsdIdrStatus(text, fullTitle = '') {
 }
 
 function setBackendConnectionStatus(isOnline, message = '') {
-    if (!dom.backendStatusDot) return;
-    if (isOnline) {
-        dom.backendStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500 inline-block ml-1 shadow-sm';
-        dom.backendStatusDot.title = message || 'Backend Vercel: Online';
-    } else {
-        dom.backendStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500 inline-block ml-1 shadow-sm animate-pulse';
-        dom.backendStatusDot.title = message || 'Backend Vercel: Offline (Fallback Aktif)';
+    if (dom.backendStatusBadge) {
+        dom.backendStatusBadge.classList.remove('ws-live', 'ws-error');
+        dom.backendStatusBadge.classList.add(isOnline ? 'ws-live' : 'ws-error');
+        dom.backendStatusBadge.title = message || (isOnline ? 'Backend USD/IDR: Online' : 'Backend USD/IDR: Offline (Fallback Aktif)');
+    }
+    if (dom.backendStatusDot) {
+        dom.backendStatusDot.title = message || (isOnline ? 'Backend USD/IDR: Online' : 'Backend USD/IDR: Offline (Fallback Aktif)');
     }
 }
 
@@ -1669,15 +1669,15 @@ function updateTreasuryWsStatus(status) {
 
     if (status === 'connected') {
         dom.treasuryWsBadge.classList.add('ws-live');
-        dom.treasuryWsBadgeText.textContent = 'Live WS';
+        dom.treasuryWsBadgeText.textContent = 'WS';
         dom.treasuryWsBadge.title = 'Koneksi Pusher WebSocket Real-Time Terhubung (0-delay push)';
     } else if (status === 'connecting') {
         dom.treasuryWsBadge.classList.add('ws-connecting');
-        dom.treasuryWsBadgeText.textContent = 'Menghubungkan...';
+        dom.treasuryWsBadgeText.textContent = 'WS';
         dom.treasuryWsBadge.title = 'Sedang menyambungkan ke Pusher WebSocket Treasury...';
     } else {
         dom.treasuryWsBadge.classList.add('ws-fallback');
-        dom.treasuryWsBadgeText.textContent = 'Fallback REST';
+        dom.treasuryWsBadgeText.textContent = 'WS';
         dom.treasuryWsBadge.title = 'WebSocket tidak aktif — Watchdog polling REST aktif';
     }
 }
