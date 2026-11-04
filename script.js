@@ -1451,23 +1451,23 @@ function updatePromoUI(isOn, promoPrice) {
     if (dom.promoStatusText) {
         if (isOn === true) {
             dom.promoStatusText.textContent = 'ON';
-            dom.promoStatusText.className = 'text-sm font-bold text-emerald-600 dark:text-emerald-400 font-numeric tracking-tight flex-shrink-0';
+            dom.promoStatusText.className = 'text-base font-bold text-green-600 dark:text-green-400 font-numeric tracking-tight';
         } else if (isOn === false) {
             dom.promoStatusText.textContent = 'OFF';
-            dom.promoStatusText.className = 'text-sm font-bold text-red-500 dark:text-red-400 font-numeric tracking-tight flex-shrink-0';
+            dom.promoStatusText.className = 'text-base font-bold text-red-600 dark:text-red-400 font-numeric tracking-tight';
         } else {
             dom.promoStatusText.textContent = '-';
-            dom.promoStatusText.className = 'text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight flex-shrink-0';
+            dom.promoStatusText.className = 'text-base font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight';
         }
     }
 
     if (dom.promoStatusDot) {
         if (isOn === true) {
-            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0 transition-colors';
-            dom.promoStatusDot.title = 'Status: Promo Treasury Sedang Aktif!';
+            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse flex-shrink-0 transition-colors';
+            dom.promoStatusDot.title = 'Status: Promo Treasury Aktif (ON)';
         } else if (isOn === false) {
-            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-400 dark:bg-red-500 flex-shrink-0 transition-colors';
-            dom.promoStatusDot.title = 'Status: Promo Tidak Aktif';
+            dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 transition-colors';
+            dom.promoStatusDot.title = 'Status: Promo Tidak Aktif (OFF)';
         } else {
             dom.promoStatusDot.className = 'w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0 transition-colors';
             dom.promoStatusDot.title = 'Status: Memuat...';
@@ -1475,14 +1475,7 @@ function updatePromoUI(isOn, promoPrice) {
     }
 
     if (dom.promoBatasHarga) {
-        if (promoPrice && Number(promoPrice) > 0) {
-            const formatted = formatRupiah(Number(promoPrice));
-            dom.promoBatasHarga.textContent = `≤ ${formatted}`;
-            dom.promoBatasHarga.title = `Batas harga promo Treasury: ${formatted}`;
-        } else {
-            dom.promoBatasHarga.textContent = '-';
-            dom.promoBatasHarga.title = 'Batas harga promo beli';
-        }
+        dom.promoBatasHarga.textContent = '';
     }
 }
 
@@ -1559,14 +1552,8 @@ function renderPromoHistoryDropdown(forceRender = false) {
 
             return `
             <div class="promo-history-item font-numeric" title="${tooltip}">
-                <div class="flex flex-col min-w-0">
-                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">${timeStr}</span>
-                    <span class="text-xxs text-gray-600 dark:text-gray-400 truncate">${dateStr}</span>
-                </div>
-                <div class="flex flex-col min-w-0">
-                    <span class="font-semibold text-gray-700 dark:text-gray-300 truncate">${formattedPrice}</span>
-                    ${item.reason ? `<span class="text-xxs text-gray-600 dark:text-gray-400 truncate" title="${item.reason}">${item.reason}</span>` : ''}
-                </div>
+                <span class="font-medium text-gray-700 dark:text-gray-300 truncate">${timeStr}</span>
+                <span class="font-semibold text-gray-800 dark:text-gray-200 text-right pr-2 truncate">${formattedPrice}</span>
                 <div class="text-right flex items-center justify-end flex-shrink-0">
                     <span class="promo-pill-badge ${badgeClass}">${badgeLabel}</span>
                 </div>

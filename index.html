@@ -411,13 +411,11 @@
                                     </div>
                                     <span id="promoStatusDot" class="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0 transition-colors" title="Status: Memuat..."></span>
                                 </div>
-                                <div class="flex items-baseline justify-between gap-1">
-                                    <p id="promoStatusText" class="text-sm font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight flex-shrink-0">
+                                <div class="flex items-baseline">
+                                    <p id="promoStatusText" class="text-base font-bold text-gray-500 dark:text-gray-400 font-numeric tracking-tight">
                                         -
                                     </p>
-                                    <span id="promoBatasHarga" class="text-xxs font-medium text-gray-500 dark:text-gray-400 font-numeric truncate text-right min-w-0" title="Batas harga beli promo">
-                                        -
-                                    </span>
+                                    <span id="promoBatasHarga" class="hidden"></span>
                                 </div>
 
                                 <!-- Dropdown Riwayat Promo -->
@@ -430,16 +428,16 @@
                                     </div>
 
                                     <!-- Panel Notifikasi PWA Langsung -->
-                                    <div class="p-2 border-b border-gray-100 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-800/60 flex items-center justify-between gap-2">
+                                    <div class="px-2.5 py-1.5 border-b border-gray-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between gap-2 text-xxs">
                                         <div class="flex items-center space-x-1.5 min-w-0">
-                                            <span id="pwaNotifDot" class="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0"></span>
-                                            <span id="pwaNotifStatusText" class="text-xxs font-medium text-gray-600 dark:text-gray-300 truncate">Notif PWA: Mati</span>
+                                            <span id="pwaNotifDot" class="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0"></span>
+                                            <span id="pwaNotifStatusText" class="font-medium text-gray-600 dark:text-gray-300 truncate">Notif PWA: Mati</span>
                                         </div>
                                         <div class="flex items-center space-x-1 flex-shrink-0">
-                                            <button id="pwaNotifTestBtn" type="button" class="hidden px-2 py-0.5 text-xxs font-semibold rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors" title="Kirim tes notifikasi ke HP/perangkat ini">
+                                            <button id="pwaNotifTestBtn" type="button" class="hidden px-2 py-0.5 rounded bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold transition-colors" title="Kirim tes notifikasi ke HP/perangkat ini">
                                                 Tes
                                             </button>
-                                            <button id="pwaNotifToggleBtn" type="button" class="px-2 py-0.5 text-xxs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors" title="Aktifkan notifikasi otomatis di HP saat promo ON">
+                                            <button id="pwaNotifToggleBtn" type="button" class="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors" title="Aktifkan notifikasi otomatis di HP saat promo ON">
                                                 Aktifkan
                                             </button>
                                         </div>
@@ -447,7 +445,7 @@
 
                                     <div class="promo-history-subheader font-numeric">
                                         <span>Waktu</span>
-                                        <span>Batas / Harga</span>
+                                        <span class="text-right pr-2">Batas / Harga</span>
                                         <span class="text-right">Status</span>
                                     </div>
                                     <div id="promoHistoryList" class="price-history-list promo-history-list">
@@ -860,7 +858,7 @@
     <!-- Pusher JS Library -->
     <script src="https://cdn.jsdelivr.net/npm/pusher-js@8.3.0/dist/web/pusher.min.js" defer></script>
     <!-- Script -->
-    <script src="script.js?v=20261104195700" defer></script>
+    <script src="script.js?v=20261104200500" defer></script>
 </body>
 
 </html>

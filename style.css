@@ -759,9 +759,9 @@ body {
     font-weight: 600;
 }
 
-/* Khusus Dropdown & Item Riwayat Promo (3 Kolom: Waktu & Tanggal, Batas / Harga, Status) */
+/* Khusus Dropdown & Item Riwayat Promo (3 Kolom Ringkas: Waktu, Harga, Status) */
 .promo-history-dropdown {
-    width: min(22rem, 92vw);
+    width: min(19rem, 92vw);
     background: #ffffff !important;
 }
 
@@ -771,10 +771,10 @@ body {
 
 .promo-history-subheader {
     display: grid;
-    grid-template-columns: 5.5rem 1fr 3.5rem;
+    grid-template-columns: 5.2rem 1fr 3rem;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.4rem 0.65rem;
+    padding: 0.35rem 0.65rem;
     font-size: 0.65rem;
     font-weight: 600;
     color: #64748b;
@@ -794,11 +794,11 @@ body {
 
 .promo-history-item {
     display: grid;
-    grid-template-columns: 5.5rem 1fr 3.5rem;
+    grid-template-columns: 5.2rem 1fr 3rem;
     align-items: center;
     gap: 0.5rem;
-    border-radius: 0.45rem;
-    padding: 0.42rem 0.65rem;
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.65rem;
     color: #111827;
     font-size: 0.72rem;
     transition: background-color 0.15s ease;
