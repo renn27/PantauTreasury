@@ -1738,9 +1738,11 @@ async function initPromoFeed() {
 
 /* ================= PWA WEB PUSH PROMO NOTIFICATIONS ================= */
 const PWA_VAPID_PUBLIC_KEY = 'BAAxHYI3EH7oFyKkwfd9P-TIpAfhEl5GD9WzP74nckzJa_NtmCxr-p9WDIHjpJO7soyltRMJFXaGwWIzNDoK4vc';
-let promoWorkerBaseUrl = '';
+const DEFAULT_PROMO_WORKER_URL = 'https://pantau-treasury-promo.akhunsatu1.workers.dev';
+let promoWorkerBaseUrl = DEFAULT_PROMO_WORKER_URL;
 try {
-    promoWorkerBaseUrl = localStorage.getItem('promo_worker_url') || '';
+    const saved = localStorage.getItem('promo_worker_url');
+    if (saved) promoWorkerBaseUrl = saved;
 } catch (e) { }
 
 function urlBase64ToUint8Array(base64String) {
@@ -1832,19 +1834,6 @@ async function togglePwaPushSubscription() {
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(PWA_VAPID_PUBLIC_KEY)
             });
-
-            if (!promoWorkerBaseUrl) {
-                const inputUrl = prompt(
-                    'Masukkan URL Cloudflare Worker Anda (contoh: https://pantau-treasury-promo.<subdomain>.workers.dev):',
-                    ''
-                );
-                if (inputUrl && inputUrl.trim()) {
-                    promoWorkerBaseUrl = inputUrl.trim().replace(/\/+$/, '');
-                    try {
-                        localStorage.setItem('promo_worker_url', promoWorkerBaseUrl);
-                    } catch (e) { }
-                }
-            }
 
             if (promoWorkerBaseUrl) {
                 try {
